@@ -45,7 +45,7 @@ class AuthenticatedSessionController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        if (! $user->canManageCatalog()) {
+        if (! $user->canAccessPanel()) {
             $recordSecurityEvent->handle(
                 SecurityEvent::LoginDenied,
                 $request,
@@ -56,7 +56,7 @@ class AuthenticatedSessionController extends Controller
             Auth::logout();
 
             return back()
-                ->withErrors(['email' => 'Este usuario todavía no tiene acceso al panel de catálogo.'])
+                ->withErrors(['email' => 'Este usuario todavía no tiene acceso al panel de Proximus.'])
                 ->onlyInput('email');
         }
 

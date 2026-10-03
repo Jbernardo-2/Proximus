@@ -11,6 +11,7 @@ return [
     'date' => 'El campo :attribute debe ser una fecha válida.',
     'decimal' => 'El campo :attribute debe tener entre :min y :max decimales.',
     'email' => 'El campo :attribute debe ser un correo electrónico válido.',
+    'enum' => 'El valor seleccionado para :attribute no es válido.',
     'exists' => 'El valor seleccionado para :attribute no es válido.',
     'gt' => [
         'numeric' => 'El campo :attribute debe ser mayor que :value.',
@@ -36,6 +37,7 @@ return [
         'uncompromised' => 'La :attribute indicada apareció en una filtración de datos. Elige otra.',
     ],
     'required' => 'El campo :attribute es obligatorio.',
+    'required_with' => 'El campo :attribute es obligatorio cuando :values está presente.',
     'string' => 'El campo :attribute debe ser texto.',
     'ulid' => 'El campo :attribute debe contener un identificador válido.',
     'unique' => 'El valor de :attribute ya está registrado.',

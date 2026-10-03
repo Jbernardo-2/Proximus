@@ -12,17 +12,31 @@ class CatalogPanelTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
-    public function test_admin_can_render_dashboard_and_catalog_navigation(): void
+    public function test_admin_can_render_dashboard_and_all_module_navigation(): void
     {
         $user = User::factory()->admin()->create();
 
         $this->actingAs($user)
             ->get('/dashboard')
             ->assertOk()
-            ->assertSee('Resumen del catálogo')
+            ->assertSee('Resumen de la operación')
+            ->assertSee(route('customers.index'), false)
+            ->assertSee(route('routes.index'), false)
             ->assertSee(route('products.index'), false)
             ->assertSee(route('categories.index'), false)
             ->assertSee(route('suppliers.index'), false);
+    }
+
+    public function test_preventista_dashboard_shows_operations_without_catalog_links(): void
+    {
+        $user = User::factory()->preventista()->create();
+
+        $this->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee(route('customers.index'), false)
+            ->assertSee(route('routes.index'), false)
+            ->assertDontSee(route('products.index'), false);
     }
 
     public function test_bodeguero_can_access_product_panel(): void

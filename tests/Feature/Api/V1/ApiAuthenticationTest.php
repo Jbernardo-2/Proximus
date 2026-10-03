@@ -26,7 +26,9 @@ class ApiAuthenticationTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('token_type', 'Bearer')
             ->assertJsonPath('abilities.0', 'catalog:manage')
-            ->assertJsonPath('abilities.1', 'users:manage')
+            ->assertJsonPath('abilities.1', 'customers:manage')
+            ->assertJsonPath('abilities.2', 'routes:manage')
+            ->assertJsonPath('abilities.3', 'users:manage')
             ->assertJsonPath('user.email', $user->email)
             ->assertJsonPath('user.role', 'admin')
             ->assertJsonPath('expires_at', fn (mixed $expiresAt): bool => is_string($expiresAt) && $expiresAt !== '');
@@ -35,7 +37,7 @@ class ApiAuthenticationTest extends TestCase
             'name' => 'tablet bodega',
         ]);
         $accessToken = $user->tokens()->firstOrFail();
-        $this->assertSame(['catalog:manage', 'users:manage'], $accessToken->abilities);
+        $this->assertSame(['catalog:manage', 'customers:manage', 'routes:manage', 'users:manage'], $accessToken->abilities);
         $this->assertNotNull($accessToken->expires_at);
         $this->assertNotNull($user->refresh()->last_login_at);
         $this->assertDatabaseHas('security_audit_logs', [

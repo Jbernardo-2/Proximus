@@ -3,12 +3,15 @@
 use App\Http\Controllers\Api\V1\AuthTokenController;
 use App\Http\Controllers\Api\V1\BrandController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\MeasurementUnitController;
 use App\Http\Controllers\Api\V1\PriceTierController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductConversionPreviewController;
 use App\Http\Controllers\Api\V1\ProductPresentationController;
 use App\Http\Controllers\Api\V1\ProductSupplierController;
+use App\Http\Controllers\Api\V1\RouteStopController;
+use App\Http\Controllers\Api\V1\SalesRouteController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +26,26 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
 
         Route::middleware(['abilities:users:manage', 'can:manage-users'])->group(function (): void {
             Route::apiResource('users', UserController::class)->except('destroy');
+        });
+
+        Route::middleware(['abilities:customers:manage', 'can:manage-customers'])->group(function (): void {
+            Route::apiResource('customers', CustomerController::class);
+        });
+
+        Route::middleware(['abilities:routes:manage', 'can:manage-routes'])->group(function (): void {
+            Route::apiResource('routes', SalesRouteController::class)
+                ->parameters(['routes' => 'salesRoute']);
+
+            Route::scopeBindings()->group(function (): void {
+                Route::post('/routes/{salesRoute}/stops', [RouteStopController::class, 'store'])
+                    ->name('routes.stops.store');
+                Route::get('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'show'])
+                    ->name('routes.stops.show');
+                Route::put('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'update'])
+                    ->name('routes.stops.update');
+                Route::delete('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'destroy'])
+                    ->name('routes.stops.destroy');
+            });
         });
 
         Route::middleware(['abilities:catalog:manage', 'can:manage-catalog'])->group(function (): void {
