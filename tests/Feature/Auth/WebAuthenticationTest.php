@@ -10,6 +10,14 @@ class WebAuthenticationTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
+    public function test_login_screen_is_available(): void
+    {
+        $this->get('/login')
+            ->assertOk()
+            ->assertSee('Bienvenido de nuevo')
+            ->assertSee('images/proximus-login-hero.webp');
+    }
+
     public function test_unauthenticated_request_redirects_to_login(): void
     {
         $this->get('/dashboard')->assertRedirect(route('login'));
