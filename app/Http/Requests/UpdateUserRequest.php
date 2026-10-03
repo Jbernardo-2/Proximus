@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UpdateUserRequest extends StoreUserRequest
 {
@@ -23,7 +24,7 @@ class UpdateUserRequest extends StoreUserRequest
         return [
             ...parent::rules(),
             'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')->ignore($this->route('user'))],
-            'password' => ['sometimes', 'nullable', 'string', 'min:8', 'confirmed'],
+            'password' => ['sometimes', 'nullable', 'string', Password::default(), 'confirmed'],
         ];
     }
 }

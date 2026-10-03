@@ -3,6 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use App\SecurityEvent;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 
@@ -35,6 +36,12 @@ class WebAuthenticationTest extends TestCase
         $response->assertRedirect(route('dashboard'));
         $this->assertAuthenticatedAs($user);
         $this->assertNotNull($user->refresh()->last_login_at);
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => $user->id,
+            'event' => SecurityEvent::LoginSucceeded->value,
+            'subject_type' => User::class,
+            'subject_id' => (string) $user->id,
+        ]);
     }
 
     public function test_inactive_user_cannot_sign_in(): void
@@ -48,6 +55,10 @@ class WebAuthenticationTest extends TestCase
 
         $response->assertSessionHasErrors('email');
         $this->assertGuest();
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => null,
+            'event' => SecurityEvent::LoginFailed->value,
+        ]);
     }
 
     public function test_repartidor_cannot_enter_catalog_panel(): void
@@ -61,6 +72,11 @@ class WebAuthenticationTest extends TestCase
 
         $response->assertSessionHasErrors('email');
         $this->assertGuest();
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => $user->id,
+            'event' => SecurityEvent::LoginDenied->value,
+            'subject_id' => (string) $user->id,
+        ]);
     }
 
     public function test_authenticated_user_can_sign_out(): void
@@ -71,5 +87,10 @@ class WebAuthenticationTest extends TestCase
 
         $response->assertRedirect(route('login'));
         $this->assertGuest();
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => $user->id,
+            'event' => SecurityEvent::Logout->value,
+            'subject_id' => (string) $user->id,
+        ]);
     }
 }

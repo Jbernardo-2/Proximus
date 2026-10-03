@@ -29,6 +29,14 @@ class User extends Authenticatable
     }
 
     /**
+     * @return list<string>
+     */
+    public function apiAbilities(): array
+    {
+        return $this->is_active ? $this->role->apiAbilities() : [];
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

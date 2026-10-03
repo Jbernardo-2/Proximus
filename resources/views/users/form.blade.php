@@ -71,17 +71,17 @@
         <section class="card p-5 sm:p-7">
             <div class="mb-6">
                 <h2 class="text-lg font-bold text-ink-950">{{ $editing ? 'Restablecer contraseña' : 'Contraseña inicial' }}</h2>
-                <p class="mt-1 text-sm text-ink-600">{{ $editing ? 'Déjala en blanco para conservar la contraseña actual.' : 'Debe contener al menos 8 caracteres.' }}</p>
+                <p class="mt-1 text-sm text-ink-600">{{ $editing ? 'Déjala en blanco para conservarla. Si la cambias, usa al menos 12 caracteres, con letras y números.' : 'Debe contener al menos 12 caracteres, con letras y números.' }}</p>
             </div>
 
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>
                     <label class="form-label" for="password">{{ $editing ? 'Nueva contraseña' : 'Contraseña *' }}</label>
-                    <input class="form-input" id="password" name="password" type="password" minlength="8" autocomplete="new-password" @required(! $editing)>
+                    <input class="form-input" id="password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" @required(! $editing)>
                 </div>
                 <div>
                     <label class="form-label" for="password_confirmation">Confirmar contraseña{{ $editing ? '' : ' *' }}</label>
-                    <input class="form-input" id="password_confirmation" name="password_confirmation" type="password" minlength="8" autocomplete="new-password" @required(! $editing)>
+                    <input class="form-input" id="password_confirmation" name="password_confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" @required(! $editing)>
                 </div>
             </div>
         </section>

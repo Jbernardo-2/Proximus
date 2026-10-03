@@ -3,6 +3,7 @@
 namespace Tests\Feature\Web;
 
 use App\Models\User;
+use App\SecurityEvent;
 use App\UserRole;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -42,8 +43,8 @@ class UserManagementTest extends TestCase
             'email' => '  MARIA@EXAMPLE.COM  ',
             'role' => UserRole::Bodeguero->value,
             'is_active' => '1',
-            'password' => 'secret-123',
-            'password_confirmation' => 'secret-123',
+            'password' => 'BodegaSegura2026',
+            'password_confirmation' => 'BodegaSegura2026',
         ]);
 
         $response->assertRedirect(route('users.index'));
@@ -52,7 +53,12 @@ class UserManagementTest extends TestCase
         $this->assertSame(UserRole::Bodeguero, $user->role);
         $this->assertTrue($user->is_active);
         $this->assertNotNull($user->email_verified_at);
-        $this->assertTrue(Hash::check('secret-123', $user->password));
+        $this->assertTrue(Hash::check('BodegaSegura2026', $user->password));
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => $administrator->id,
+            'event' => SecurityEvent::UserCreated->value,
+            'subject_id' => (string) $user->id,
+        ]);
     }
 
     public function test_administrator_can_change_access_and_reset_another_users_password(): void
@@ -66,16 +72,21 @@ class UserManagementTest extends TestCase
             'email' => $user->email,
             'role' => UserRole::Supervisor->value,
             'is_active' => '0',
-            'password' => 'new-password',
-            'password_confirmation' => 'new-password',
+            'password' => 'NuevaClave2026',
+            'password_confirmation' => 'NuevaClave2026',
         ]);
 
         $response->assertRedirect(route('users.index'));
         $user->refresh();
         $this->assertSame(UserRole::Supervisor, $user->role);
         $this->assertFalse($user->is_active);
-        $this->assertTrue(Hash::check('new-password', $user->password));
+        $this->assertTrue(Hash::check('NuevaClave2026', $user->password));
         $this->assertCount(0, $user->tokens);
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => $administrator->id,
+            'event' => SecurityEvent::UserUpdated->value,
+            'subject_id' => (string) $user->id,
+        ]);
     }
 
     public function test_empty_password_keeps_the_current_password_when_updating(): void
@@ -107,6 +118,22 @@ class UserManagementTest extends TestCase
         ])->assertSessionHasErrors('is_active');
 
         $this->assertTrue($administrator->refresh()->is_active);
+    }
+
+    public function test_weak_password_is_rejected_when_creating_a_user(): void
+    {
+        $administrator = User::factory()->admin()->create();
+
+        $this->actingAs($administrator)->post(route('users.store'), [
+            'name' => 'Usuario inseguro',
+            'email' => 'inseguro@example.com',
+            'role' => UserRole::Bodeguero->value,
+            'is_active' => '1',
+            'password' => 'short123',
+            'password_confirmation' => 'short123',
+        ])->assertSessionHasErrors('password');
+
+        $this->assertDatabaseMissing('users', ['email' => 'inseguro@example.com']);
     }
 
     public function test_administrator_cannot_remove_own_administrator_role(): void

@@ -13,7 +13,7 @@ use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')->name('api.v1.')->group(function (): void {
+Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function (): void {
     Route::post('/tokens', [AuthTokenController::class, 'store'])
         ->middleware('throttle:login')
         ->name('tokens.store');
@@ -21,11 +21,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::delete('/tokens/current', [AuthTokenController::class, 'destroy'])->name('tokens.destroy');
 
-        Route::middleware('can:manage-users')->group(function (): void {
+        Route::middleware(['abilities:users:manage', 'can:manage-users'])->group(function (): void {
             Route::apiResource('users', UserController::class)->except('destroy');
         });
 
-        Route::middleware('can:manage-catalog')->group(function (): void {
+        Route::middleware(['abilities:catalog:manage', 'can:manage-catalog'])->group(function (): void {
             Route::apiResource('categories', CategoryController::class);
             Route::apiResource('brands', BrandController::class);
             Route::apiResource('suppliers', SupplierController::class);

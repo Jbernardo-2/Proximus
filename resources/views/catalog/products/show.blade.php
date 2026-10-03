@@ -50,16 +50,16 @@
 
         <div class="space-y-4">
             @foreach($product->presentations as $presentation)
-                <article class="card overflow-hidden">
+                <article data-presentation-card class="card relative overflow-visible">
                     <div class="grid gap-4 p-5 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                         <div>
                             <div class="flex flex-wrap items-center gap-2"><h3 class="font-bold text-ink-950">{{ $presentation->name }}</h3>@if($presentation->is_base)<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">BASE</span>@endif<x-status-badge :active="$presentation->is_active" /></div>
                             <p class="mt-1 text-sm text-ink-600">1 {{ $presentation->name }} = {{ rtrim(rtrim($presentation->conversion_factor, '0'), '.') }} {{ $product->baseUnit->symbol }} · Código: {{ $presentation->barcode ?: 'no registrado' }}</p>
                         </div>
                         <div class="sm:text-right"><p class="text-xs text-ink-600">Precio normal</p><p class="text-xl font-black text-ink-950">{{ number_format((float) $presentation->sale_price, 2) }}</p></div>
-                        <details class="relative">
+                        <details class="relative open:z-30">
                             <summary class="btn-secondary cursor-pointer list-none">Configurar</summary>
-                            <div class="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-4 sm:absolute sm:right-0 sm:z-10 sm:w-[36rem] sm:shadow-xl">
+                            <div data-presentation-config-panel class="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-4 sm:absolute sm:top-full sm:right-0 sm:z-30 sm:w-[36rem] sm:shadow-xl">
                                 <form method="POST" action="{{ route('products.presentations.update', [$product, $presentation]) }}" class="grid gap-3 sm:grid-cols-2">@csrf @method('PUT')
                                     <div><label class="form-label">Nombre</label><input class="form-input" name="name" required value="{{ $presentation->name }}"></div>
                                     <div><label class="form-label">Código de barras</label><input class="form-input" name="barcode" value="{{ $presentation->barcode }}"></div>
@@ -73,7 +73,7 @@
                         </details>
                     </div>
 
-                    <div class="border-t border-stone-100 bg-stone-50/60 px-5 py-4">
+                    <div class="rounded-b-2xl border-t border-stone-100 bg-stone-50/60 px-5 py-4">
                         <div class="mb-3 flex items-center justify-between gap-3"><div><h4 class="text-sm font-bold text-ink-950">Precios por cantidad</h4><p class="text-xs text-ink-600">Reemplazan el precio normal cuando cantidad y vigencia coinciden.</p></div><details><summary class="cursor-pointer text-sm font-semibold text-leaf-700">＋ Agregar precio</summary><form method="POST" action="{{ route('products.presentations.price-tiers.store', [$product, $presentation]) }}" class="mt-3 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 sm:grid-cols-3 lg:grid-cols-6">@csrf<div><label class="form-label">Desde *</label><input class="form-input" name="min_quantity" type="number" min="0.000001" step="0.000001" required></div><div><label class="form-label">Hasta</label><input class="form-input" name="max_quantity" type="number" min="0.000001" step="0.000001"></div><div><label class="form-label">Precio *</label><input class="form-input" name="unit_price" type="number" min="0" step="0.0001" required></div><div><label class="form-label">Inicia</label><input class="form-input" name="starts_at" type="date"></div><div><label class="form-label">Finaliza</label><input class="form-input" name="ends_at" type="date"></div><div class="flex items-end"><input type="hidden" name="is_active" value="1"><button class="btn-primary w-full">Agregar</button></div></form></details></div>
 
                         @if($presentation->priceTiers->isEmpty())

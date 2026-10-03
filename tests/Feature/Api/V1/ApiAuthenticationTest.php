@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Models\User;
+use App\SecurityEvent;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -24,13 +25,24 @@ class ApiAuthenticationTest extends TestCase
         $response
             ->assertCreated()
             ->assertJsonPath('token_type', 'Bearer')
+            ->assertJsonPath('abilities.0', 'catalog:manage')
+            ->assertJsonPath('abilities.1', 'users:manage')
             ->assertJsonPath('user.email', $user->email)
-            ->assertJsonPath('user.role', 'admin');
+            ->assertJsonPath('user.role', 'admin')
+            ->assertJsonPath('expires_at', fn (mixed $expiresAt): bool => is_string($expiresAt) && $expiresAt !== '');
         $this->assertDatabaseHas('personal_access_tokens', [
             'tokenable_id' => $user->id,
             'name' => 'tablet bodega',
         ]);
+        $accessToken = $user->tokens()->firstOrFail();
+        $this->assertSame(['catalog:manage', 'users:manage'], $accessToken->abilities);
+        $this->assertNotNull($accessToken->expires_at);
         $this->assertNotNull($user->refresh()->last_login_at);
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => $user->id,
+            'event' => SecurityEvent::TokenIssued->value,
+            'subject_id' => (string) $user->id,
+        ]);
     }
 
     public function test_invalid_credentials_return_422(): void
@@ -41,6 +53,12 @@ class ApiAuthenticationTest extends TestCase
             'email' => $user->email,
             'password' => 'incorrecta',
         ])->assertUnprocessable()->assertJsonValidationErrors('email');
+
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => null,
+            'event' => SecurityEvent::LoginFailed->value,
+            'subject_id' => (string) $user->id,
+        ]);
     }
 
     public function test_request_without_token_returns_401(): void
@@ -50,8 +68,30 @@ class ApiAuthenticationTest extends TestCase
 
     public function test_repartidor_token_is_forbidden_from_catalog(): void
     {
-        Sanctum::actingAs(User::factory()->repartidor()->create());
+        Sanctum::actingAs(User::factory()->repartidor()->create(), ['catalog:manage']);
 
         $this->getJson('/api/v1/products')->assertForbidden();
+    }
+
+    public function test_current_token_can_be_revoked_and_is_audited(): void
+    {
+        $user = User::factory()->admin()->create();
+        $plainTextToken = $user->createToken(
+            'tablet ruta',
+            ['catalog:manage', 'users:manage'],
+            now()->addDay(),
+        )->plainTextToken;
+
+        $this->withToken($plainTextToken)
+            ->deleteJson('/api/v1/tokens/current')
+            ->assertOk()
+            ->assertJsonPath('message', 'Sesión cerrada correctamente.');
+
+        $this->assertCount(0, $user->tokens()->get());
+        $this->assertDatabaseHas('security_audit_logs', [
+            'user_id' => $user->id,
+            'event' => SecurityEvent::TokenRevoked->value,
+            'subject_id' => (string) $user->id,
+        ]);
     }
 }

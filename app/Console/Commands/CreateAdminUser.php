@@ -6,13 +6,14 @@ use App\Models\User;
 use App\UserRole;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Password;
 
 class CreateAdminUser extends Command
 {
     protected $signature = 'app:create-admin
         {--name= : Nombre completo}
         {--email= : Correo electrónico}
-        {--password= : Contraseña de al menos 8 caracteres}';
+        {--password= : Contraseña de al menos 12 caracteres, con letras y números}';
 
     protected $description = 'Crea o actualiza el usuario administrador inicial';
 
@@ -25,7 +26,7 @@ class CreateAdminUser extends Command
         $validator = Validator::make(compact('name', 'email', 'password'), [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email:rfc', 'max:255'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => ['required', 'string', Password::default()],
         ]);
 
         if ($validator->fails()) {
