@@ -30,4 +30,22 @@ enum UserRole: string
     {
         return $this === self::Admin;
     }
+
+    /**
+     * @return list<string>
+     */
+    public function apiAbilities(): array
+    {
+        $abilities = [];
+
+        if ($this->canManageCatalog()) {
+            $abilities[] = 'catalog:manage';
+        }
+
+        if ($this->canManageUsers()) {
+            $abilities[] = 'users:manage';
+        }
+
+        return $abilities;
+    }
 }

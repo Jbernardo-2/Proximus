@@ -165,4 +165,38 @@ class ProductManagementTest extends TestCase
             ->assertSee('12.50')
             ->assertSee('10.00');
     }
+
+    public function test_presentation_configuration_panel_is_not_clipped_and_updates_the_price(): void
+    {
+        $user = User::factory()->admin()->create();
+        $product = Product::factory()->create();
+        $presentation = ProductPresentation::factory()->for($product)->base()->create([
+            'name' => 'Unidad',
+            'sale_price' => '12.50',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('products.show', $product))
+            ->assertOk()
+            ->assertSee('data-presentation-card', false)
+            ->assertSee('class="card relative overflow-visible"', false)
+            ->assertSee('data-presentation-config-panel', false)
+            ->assertSee('sm:top-full', false)
+            ->assertSee('Guardar presentación');
+
+        $this->actingAs($user)
+            ->put(route('products.presentations.update', [$product, $presentation]), [
+                'name' => 'Unidad',
+                'barcode' => null,
+                'conversion_factor' => '1',
+                'sale_price' => '14.75',
+                'is_sellable' => '1',
+                'is_purchasable' => '1',
+                'is_active' => '1',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Presentación actualizada correctamente.');
+
+        $this->assertSame('14.7500', $presentation->refresh()->sale_price);
+    }
 }

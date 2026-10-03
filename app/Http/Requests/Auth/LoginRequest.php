@@ -11,11 +11,24 @@ class LoginRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $normalized = [
+            'email' => mb_strtolower(trim($this->string('email')->toString())),
+        ];
+
+        if ($this->has('device_name')) {
+            $normalized['device_name'] = trim($this->string('device_name')->toString());
+        }
+
+        $this->merge($normalized);
+    }
+
     public function rules(): array
     {
         return [
             'email' => ['required', 'email:rfc', 'max:255'],
-            'password' => ['required', 'string'],
+            'password' => ['required', 'string', 'max:128'],
             'remember' => ['sometimes', 'boolean'],
             'device_name' => ['sometimes', 'string', 'max:100'],
         ];

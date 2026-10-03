@@ -19,7 +19,7 @@ class ProductApiTest extends TestCase
 
     public function test_valid_payload_creates_product_and_base_presentation_and_returns_201(): void
     {
-        Sanctum::actingAs(User::factory()->admin()->create());
+        Sanctum::actingAs(User::factory()->admin()->create(), ['catalog:manage']);
         $category = Category::factory()->create();
         $brand = Brand::factory()->create();
         $unit = MeasurementUnit::factory()->create([
@@ -63,7 +63,7 @@ class ProductApiTest extends TestCase
 
     public function test_conversion_preview_returns_box_and_units_without_changing_data(): void
     {
-        Sanctum::actingAs(User::factory()->admin()->create());
+        Sanctum::actingAs(User::factory()->admin()->create(), ['catalog:manage']);
         [$product, $base] = $this->createProductWithBasePresentation();
         $box = ProductPresentation::factory()->for($product)->create([
             'name' => 'Caja 24',
@@ -88,7 +88,7 @@ class ProductApiTest extends TestCase
 
     public function test_overlapping_active_price_range_returns_422(): void
     {
-        Sanctum::actingAs(User::factory()->admin()->create());
+        Sanctum::actingAs(User::factory()->admin()->create(), ['catalog:manage']);
         [$product, $presentation] = $this->createProductWithBasePresentation();
         PriceTier::factory()->for($presentation, 'presentation')->create([
             'min_quantity' => '10',
@@ -117,7 +117,7 @@ class ProductApiTest extends TestCase
 
     public function test_scoped_binding_returns_404_for_presentation_of_another_product(): void
     {
-        Sanctum::actingAs(User::factory()->admin()->create());
+        Sanctum::actingAs(User::factory()->admin()->create(), ['catalog:manage']);
         [$firstProduct] = $this->createProductWithBasePresentation();
         [$secondProduct, $secondPresentation] = $this->createProductWithBasePresentation();
 
