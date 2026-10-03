@@ -1,0 +1,13 @@
+@extends('layouts.app')
+
+@php($editing = $supplier->exists)
+@section('title', $editing ? 'Editar proveedor' : 'Nuevo proveedor')
+@section('page-title', $editing ? 'Editar proveedor' : 'Nuevo proveedor')
+@section('page-subtitle', 'Los datos de contacto son opcionales y pueden completarse después.')
+
+@section('content')
+    <div class="max-w-4xl"><form method="POST" action="{{ $editing ? route('suppliers.update', $supplier) : route('suppliers.store') }}" class="card p-5 sm:p-7">@csrf @if($editing) @method('PUT') @endif
+        <div class="grid gap-5 sm:grid-cols-2"><div><label class="form-label" for="name">Nombre *</label><input class="form-input" id="name" name="name" required maxlength="160" value="{{ old('name', $supplier->name) }}"></div><div><label class="form-label" for="code">Código interno</label><input class="form-input" id="code" name="code" maxlength="40" value="{{ old('code', $supplier->code) }}" placeholder="PROV-001"></div><div><label class="form-label" for="contact_name">Persona de contacto</label><input class="form-input" id="contact_name" name="contact_name" maxlength="160" value="{{ old('contact_name', $supplier->contact_name) }}"></div><div><label class="form-label" for="phone">Teléfono</label><input class="form-input" id="phone" name="phone" maxlength="40" value="{{ old('phone', $supplier->phone) }}"></div><div><label class="form-label" for="email">Correo</label><input class="form-input" id="email" name="email" type="email" value="{{ old('email', $supplier->email) }}"></div><div class="sm:col-span-2"><label class="form-label" for="address">Dirección</label><textarea class="form-input min-h-24" id="address" name="address">{{ old('address', $supplier->address) }}</textarea></div><div class="sm:col-span-2"><label class="form-label" for="notes">Notas</label><textarea class="form-input min-h-24" id="notes" name="notes">{{ old('notes', $supplier->notes) }}</textarea></div><div class="sm:col-span-2"><input type="hidden" name="is_active" value="0"><label class="flex items-center gap-3 rounded-xl border border-stone-200 p-4"><input class="size-4 rounded border-stone-300 text-leaf-700" type="checkbox" name="is_active" value="1" @checked((bool) old('is_active', $supplier->exists ? $supplier->is_active : true))><span><span class="block text-sm font-semibold">Proveedor activo</span><span class="text-xs text-ink-600">Disponible para vincularlo a productos.</span></span></label></div></div>
+        <div class="mt-7 flex justify-end gap-3"><a class="btn-secondary" href="{{ route('suppliers.index') }}">Cancelar</a><button class="btn-primary">{{ $editing ? 'Guardar cambios' : 'Crear proveedor' }}</button></div>
+    </form></div>
+@endsection

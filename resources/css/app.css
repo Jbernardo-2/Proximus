@@ -1,0 +1,81 @@
+@import 'tailwindcss';
+
+@source '../views/**/*.blade.php';
+@source '../js/**/*.js';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans: 'Instrument Sans', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+    --color-ink-950: #12211d;
+    --color-ink-800: #29443b;
+    --color-ink-600: #557068;
+    --color-leaf-700: #146c55;
+    --color-leaf-600: #188365;
+    --color-leaf-500: #22a27b;
+    --color-mint-100: #dff5ec;
+    --color-mint-50: #f1faf7;
+    --color-sun-500: #f3a629;
+    --color-sand-100: #f3efe6;
+    --color-sand-50: #faf8f3;
+}
+
+@layer base {
+    body {
+        @apply bg-sand-50 text-ink-950 antialiased;
+    }
+
+    button,
+    a,
+    input,
+    select,
+    textarea {
+        @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-leaf-600;
+    }
+}
+
+@layer components {
+    .card {
+        @apply rounded-2xl border border-stone-200/80 bg-white shadow-sm;
+    }
+
+    .btn-primary {
+        @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-leaf-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-leaf-600 disabled:cursor-not-allowed disabled:opacity-60;
+    }
+
+    .btn-secondary {
+        @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-ink-800 transition hover:border-leaf-600 hover:text-leaf-700;
+    }
+
+    .btn-danger {
+        @apply inline-flex min-h-9 items-center justify-center rounded-xl border border-red-200 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 transition hover:bg-red-50;
+    }
+
+    .form-label {
+        @apply mb-1.5 block text-sm font-semibold text-ink-800;
+    }
+
+    .form-input {
+        @apply block min-h-11 w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-ink-950 placeholder:text-stone-400 shadow-xs transition hover:border-stone-400 focus:border-leaf-600 focus:ring-3 focus:ring-leaf-500/15;
+    }
+
+    .form-help {
+        @apply mt-1.5 text-xs leading-5 text-ink-600;
+    }
+
+    .nav-link {
+        @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-stone-300 transition hover:bg-white/10 hover:text-white;
+    }
+
+    .nav-link-active {
+        @apply bg-white/12 text-white shadow-sm;
+    }
+
+    .table-heading {
+        @apply px-4 py-3 text-left text-xs font-semibold tracking-wide text-ink-600 uppercase;
+    }
+
+    .table-cell {
+        @apply border-t border-stone-100 px-4 py-3.5 text-sm text-ink-800;
+    }
+}
