@@ -9,35 +9,50 @@
     </head>
     <body>
         <div class="min-h-screen lg:grid lg:grid-cols-[17rem_1fr]">
-            <aside class="hidden min-h-screen bg-ink-950 px-4 py-6 lg:sticky lg:top-0 lg:block lg:h-screen">
+            <aside class="hidden min-h-screen bg-ink-950 px-4 py-6 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
                 <a href="{{ route('dashboard') }}" class="mb-8 flex items-center gap-3 px-2 text-white">
                     <span class="grid size-10 place-items-center rounded-xl bg-leaf-500 text-lg font-black">P</span>
                     <span>
                         <span class="block text-lg font-bold leading-5">{{ config('app.name') }}</span>
-                        <span class="text-xs text-stone-400">Catálogo de distribución</span>
+                        <span class="text-xs text-stone-400">Distribución y rutas</span>
                     </span>
                 </a>
 
-                <nav class="space-y-1" aria-label="Navegación principal">
+                <nav class="flex-1 space-y-1 overflow-y-auto pb-4" aria-label="Navegación principal">
                     <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard') ? 'nav-link-active' : '' }}">
                         <span class="text-base">⌂</span> Resumen
                     </a>
-                    <p class="px-3 pb-1 pt-6 text-[11px] font-semibold tracking-[0.16em] text-stone-500 uppercase">Catálogo</p>
-                    <a href="{{ route('products.index') }}" class="nav-link {{ request()->routeIs('products.*') ? 'nav-link-active' : '' }}">
-                        <span class="text-base">▦</span> Productos
-                    </a>
-                    <a href="{{ route('categories.index') }}" class="nav-link {{ request()->routeIs('categories.*') ? 'nav-link-active' : '' }}">
-                        <span class="text-base">◇</span> Categorías
-                    </a>
-                    <a href="{{ route('brands.index') }}" class="nav-link {{ request()->routeIs('brands.*') ? 'nav-link-active' : '' }}">
-                        <span class="text-base">◉</span> Marcas
-                    </a>
-                    <a href="{{ route('measurement-units.index') }}" class="nav-link {{ request()->routeIs('measurement-units.*') ? 'nav-link-active' : '' }}">
-                        <span class="text-base">↔</span> Unidades
-                    </a>
-                    <a href="{{ route('suppliers.index') }}" class="nav-link {{ request()->routeIs('suppliers.*') ? 'nav-link-active' : '' }}">
-                        <span class="text-base">▱</span> Proveedores
-                    </a>
+                    @if (auth()->user()->can('manage-customers') || auth()->user()->can('manage-routes'))
+                        <p class="px-3 pb-1 pt-6 text-[11px] font-semibold tracking-[0.16em] text-stone-500 uppercase">Operación</p>
+                        @can('manage-customers')
+                            <a href="{{ route('customers.index') }}" class="nav-link {{ request()->routeIs('customers.*') ? 'nav-link-active' : '' }}">
+                                <span class="text-base">♧</span> Clientes
+                            </a>
+                        @endcan
+                        @can('manage-routes')
+                            <a href="{{ route('routes.index') }}" class="nav-link {{ request()->routeIs('routes.*') ? 'nav-link-active' : '' }}">
+                                <span class="text-base">⌁</span> Rutas
+                            </a>
+                        @endcan
+                    @endif
+                    @can('manage-catalog')
+                        <p class="px-3 pb-1 pt-6 text-[11px] font-semibold tracking-[0.16em] text-stone-500 uppercase">Catálogo</p>
+                        <a href="{{ route('products.index') }}" class="nav-link {{ request()->routeIs('products.*') ? 'nav-link-active' : '' }}">
+                            <span class="text-base">▦</span> Productos
+                        </a>
+                        <a href="{{ route('categories.index') }}" class="nav-link {{ request()->routeIs('categories.*') ? 'nav-link-active' : '' }}">
+                            <span class="text-base">◇</span> Categorías
+                        </a>
+                        <a href="{{ route('brands.index') }}" class="nav-link {{ request()->routeIs('brands.*') ? 'nav-link-active' : '' }}">
+                            <span class="text-base">◉</span> Marcas
+                        </a>
+                        <a href="{{ route('measurement-units.index') }}" class="nav-link {{ request()->routeIs('measurement-units.*') ? 'nav-link-active' : '' }}">
+                            <span class="text-base">↔</span> Unidades
+                        </a>
+                        <a href="{{ route('suppliers.index') }}" class="nav-link {{ request()->routeIs('suppliers.*') ? 'nav-link-active' : '' }}">
+                            <span class="text-base">▱</span> Proveedores
+                        </a>
+                    @endcan
                     @can('manage-users')
                         <p class="px-3 pb-1 pt-6 text-[11px] font-semibold tracking-[0.16em] text-stone-500 uppercase">Administración</p>
                         <a href="{{ route('users.index') }}" class="nav-link {{ request()->routeIs('users.*') ? 'nav-link-active' : '' }}">
@@ -46,7 +61,7 @@
                     @endcan
                 </nav>
 
-                <div class="absolute bottom-5 left-4 right-4 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-stone-300">
+                <div class="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-stone-300">
                     <p class="truncate font-semibold text-white">{{ auth()->user()->name }}</p>
                     <p class="mb-3 text-xs text-stone-400">{{ auth()->user()->role->label() }}</p>
                     <form method="POST" action="{{ route('logout') }}">
@@ -75,11 +90,19 @@
                     </div>
                     <nav data-mobile-menu class="mx-auto mt-3 hidden max-w-7xl grid-cols-2 gap-2 rounded-xl bg-ink-950 p-3 text-sm text-white lg:hidden">
                         <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('dashboard') }}">Resumen</a>
-                        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('products.index') }}">Productos</a>
-                        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('categories.index') }}">Categorías</a>
-                        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('brands.index') }}">Marcas</a>
-                        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('measurement-units.index') }}">Unidades</a>
-                        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('suppliers.index') }}">Proveedores</a>
+                        @can('manage-customers')
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('customers.index') }}">Clientes</a>
+                        @endcan
+                        @can('manage-routes')
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('routes.index') }}">Rutas</a>
+                        @endcan
+                        @can('manage-catalog')
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('products.index') }}">Productos</a>
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('categories.index') }}">Categorías</a>
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('brands.index') }}">Marcas</a>
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('measurement-units.index') }}">Unidades</a>
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('suppliers.index') }}">Proveedores</a>
+                        @endcan
                         @can('manage-users')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('users.index') }}">Usuarios</a>
                         @endcan

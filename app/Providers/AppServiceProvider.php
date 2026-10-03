@@ -29,7 +29,10 @@ class AppServiceProvider extends ServiceProvider
     {
         Model::preventLazyLoading(! app()->isProduction());
 
+        Gate::define('access-panel', fn (User $user): bool => $user->canAccessPanel());
         Gate::define('manage-catalog', fn (User $user): bool => $user->canManageCatalog());
+        Gate::define('manage-customers', fn (User $user): bool => $user->canManageCustomers());
+        Gate::define('manage-routes', fn (User $user): bool => $user->canManageRoutes());
         Gate::define('manage-users', fn (User $user): bool => $user->canManageUsers());
 
         Password::defaults(fn (): Password => Password::min(12)

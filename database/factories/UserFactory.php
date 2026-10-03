@@ -56,6 +56,11 @@ class UserFactory extends Factory
         return $this->state(fn (): array => ['role' => UserRole::Supervisor]);
     }
 
+    public function preventista(): static
+    {
+        return $this->state(fn (): array => ['role' => UserRole::Preventista]);
+    }
+
     public function repartidor(): static
     {
         return $this->state(fn (): array => ['role' => UserRole::Repartidor]);

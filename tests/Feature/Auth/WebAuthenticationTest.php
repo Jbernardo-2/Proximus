@@ -44,6 +44,19 @@ class WebAuthenticationTest extends TestCase
         ]);
     }
 
+    public function test_active_preventista_can_sign_in_to_operations_panel(): void
+    {
+        $user = User::factory()->preventista()->create(['password' => 'secret-123']);
+
+        $response = $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'secret-123',
+        ]);
+
+        $response->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
+    }
+
     public function test_inactive_user_cannot_sign_in(): void
     {
         $user = User::factory()->admin()->inactive()->create(['password' => 'secret-123']);

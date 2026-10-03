@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MeasurementUnitController;
 use App\Http\Controllers\PriceTierController;
@@ -10,6 +11,8 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductConversionPreviewController;
 use App\Http\Controllers\ProductPresentationController;
 use App\Http\Controllers\ProductSupplierController;
+use App\Http\Controllers\RouteStopController;
+use App\Http\Controllers\SalesRouteController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -25,9 +28,11 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 
-Route::middleware(['auth', 'can:manage-catalog'])->group(function (): void {
-    Route::get('/dashboard', DashboardController::class)->name('dashboard');
+Route::get('/dashboard', DashboardController::class)
+    ->middleware(['auth', 'can:access-panel'])
+    ->name('dashboard');
 
+Route::middleware(['auth', 'can:manage-catalog'])->group(function (): void {
     Route::resource('categories', CategoryController::class)->except(['show']);
     Route::resource('brands', BrandController::class)->except(['show']);
     Route::resource('suppliers', SupplierController::class)->except(['show']);
@@ -60,6 +65,24 @@ Route::middleware(['auth', 'can:manage-catalog'])->group(function (): void {
 
         Route::get('/products/{product}/conversion-preview', ProductConversionPreviewController::class)
             ->name('products.conversion-preview');
+    });
+});
+
+Route::middleware(['auth', 'can:manage-customers'])->group(function (): void {
+    Route::resource('customers', CustomerController::class);
+});
+
+Route::middleware(['auth', 'can:manage-routes'])->group(function (): void {
+    Route::resource('routes', SalesRouteController::class)
+        ->parameters(['routes' => 'salesRoute']);
+
+    Route::scopeBindings()->group(function (): void {
+        Route::post('/routes/{salesRoute}/stops', [RouteStopController::class, 'store'])
+            ->name('routes.stops.store');
+        Route::put('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'update'])
+            ->name('routes.stops.update');
+        Route::delete('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'destroy'])
+            ->name('routes.stops.destroy');
     });
 });
 

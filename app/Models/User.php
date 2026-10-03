@@ -7,6 +7,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -18,6 +19,21 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
+    public function salesRoutes(): HasMany
+    {
+        return $this->hasMany(SalesRoute::class, 'salesperson_id');
+    }
+
+    public function deliveryRoutes(): HasMany
+    {
+        return $this->hasMany(SalesRoute::class, 'driver_id');
+    }
+
+    public function canAccessPanel(): bool
+    {
+        return $this->is_active && $this->role->canAccessPanel();
+    }
+
     public function canManageCatalog(): bool
     {
         return $this->is_active && $this->role->canManageCatalog();
@@ -26,6 +42,16 @@ class User extends Authenticatable
     public function canManageUsers(): bool
     {
         return $this->is_active && $this->role->canManageUsers();
+    }
+
+    public function canManageCustomers(): bool
+    {
+        return $this->is_active && $this->role->canManageCustomers();
+    }
+
+    public function canManageRoutes(): bool
+    {
+        return $this->is_active && $this->role->canManageRoutes();
     }
 
     /**
