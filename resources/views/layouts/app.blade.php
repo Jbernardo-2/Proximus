@@ -38,6 +38,12 @@
                     <a href="{{ route('suppliers.index') }}" class="nav-link {{ request()->routeIs('suppliers.*') ? 'nav-link-active' : '' }}">
                         <span class="text-base">▱</span> Proveedores
                     </a>
+                    @can('manage-users')
+                        <p class="px-3 pb-1 pt-6 text-[11px] font-semibold tracking-[0.16em] text-stone-500 uppercase">Administración</p>
+                        <a href="{{ route('users.index') }}" class="nav-link {{ request()->routeIs('users.*') ? 'nav-link-active' : '' }}">
+                            <span class="text-base">♙</span> Usuarios
+                        </a>
+                    @endcan
                 </nav>
 
                 <div class="absolute bottom-5 left-4 right-4 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-stone-300">
@@ -74,6 +80,9 @@
                         <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('brands.index') }}">Marcas</a>
                         <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('measurement-units.index') }}">Unidades</a>
                         <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('suppliers.index') }}">Proveedores</a>
+                        @can('manage-users')
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('users.index') }}">Usuarios</a>
+                        @endcan
                     </nav>
                 </header>
 

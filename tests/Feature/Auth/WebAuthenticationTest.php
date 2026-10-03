@@ -34,6 +34,7 @@ class WebAuthenticationTest extends TestCase
 
         $response->assertRedirect(route('dashboard'));
         $this->assertAuthenticatedAs($user);
+        $this->assertNotNull($user->refresh()->last_login_at);
     }
 
     public function test_inactive_user_cannot_sign_in(): void

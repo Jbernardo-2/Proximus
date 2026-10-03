@@ -30,6 +30,7 @@ class ApiAuthenticationTest extends TestCase
             'tokenable_id' => $user->id,
             'name' => 'tablet bodega',
         ]);
+        $this->assertNotNull($user->refresh()->last_login_at);
     }
 
     public function test_invalid_credentials_return_422(): void

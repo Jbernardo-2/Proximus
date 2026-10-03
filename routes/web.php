@@ -11,6 +11,7 @@ use App\Http\Controllers\ProductConversionPreviewController;
 use App\Http\Controllers\ProductPresentationController;
 use App\Http\Controllers\ProductSupplierController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -60,4 +61,8 @@ Route::middleware(['auth', 'can:manage-catalog'])->group(function (): void {
         Route::get('/products/{product}/conversion-preview', ProductConversionPreviewController::class)
             ->name('products.conversion-preview');
     });
+});
+
+Route::middleware(['auth', 'can:manage-users'])->group(function (): void {
+    Route::resource('users', UserController::class)->except(['show', 'destroy']);
 });

@@ -25,4 +25,9 @@ enum UserRole: string
     {
         return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero], true);
     }
+
+    public function canManageUsers(): bool
+    {
+        return $this === self::Admin;
+    }
 }
