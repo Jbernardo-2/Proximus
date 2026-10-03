@@ -5,6 +5,22 @@ mobileMenuButton?.addEventListener('click', () => {
     mobileMenu?.classList.toggle('hidden');
 });
 
+document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+    const passwordInput = document.getElementById(button.dataset.passwordToggle);
+    const visibleIcon = button.querySelector('[data-password-visible-icon]');
+    const hiddenIcon = button.querySelector('[data-password-hidden-icon]');
+
+    button.addEventListener('click', () => {
+        const passwordIsVisible = passwordInput.type === 'text';
+
+        passwordInput.type = passwordIsVisible ? 'password' : 'text';
+        button.setAttribute('aria-pressed', String(! passwordIsVisible));
+        button.setAttribute('aria-label', passwordIsVisible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+        visibleIcon?.classList.toggle('hidden', ! passwordIsVisible);
+        hiddenIcon?.classList.toggle('hidden', passwordIsVisible);
+    });
+});
+
 document.querySelectorAll('form[data-confirm]').forEach((form) => {
     form.addEventListener('submit', (event) => {
         if (! window.confirm(form.dataset.confirm)) {
