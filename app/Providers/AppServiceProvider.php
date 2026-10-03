@@ -29,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         Model::preventLazyLoading(! app()->isProduction());
 
         Gate::define('manage-catalog', fn (User $user): bool => $user->canManageCatalog());
+        Gate::define('manage-users', fn (User $user): bool => $user->canManageUsers());
 
         RateLimiter::for('login', function (Request $request): Limit {
             $email = Str::lower($request->string('email')->toString());

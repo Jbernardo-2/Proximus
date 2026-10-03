@@ -23,6 +23,7 @@ class AuthTokenController extends Controller
             ]);
         }
 
+        $user->forceFill(['last_login_at' => now()])->save();
         $token = $user->createToken($request->string('device_name', 'aplicación móvil')->toString(), ['catalog:manage'])->plainTextToken;
 
         return response()->json([
