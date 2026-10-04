@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\RouteStop;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\OrderStatus;
 use App\UserRole;
 use Carbon\CarbonImmutable;
@@ -47,6 +48,15 @@ class CreateOrderAction
 
             $salesperson = $salesRoute?->salesperson
                 ?? User::query()->findOrFail($data['salesperson_id']);
+            $warehouse = isset($data['warehouse_id'])
+                ? Warehouse::query()->findOrFail($data['warehouse_id'])
+                : Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->first();
+
+            if ($warehouse === null || ! $warehouse->is_active) {
+                throw ValidationException::withMessages([
+                    'warehouse_id' => ['Configura una bodega activa antes de crear pedidos.'],
+                ]);
+            }
 
             if (! $salesperson->is_active || $salesperson->role !== UserRole::Preventista) {
                 throw ValidationException::withMessages([
@@ -62,11 +72,14 @@ class CreateOrderAction
                 'route_stop_id' => $routeStop?->id,
                 'salesperson_id' => $salesperson->id,
                 'created_by' => $actor->id,
+                'warehouse_id' => $warehouse->id,
                 'order_date' => $orderDate,
                 'requested_delivery_date' => $data['requested_delivery_date'] ?? null,
                 'payment_term' => $data['payment_term'],
                 'status' => OrderStatus::Draft,
                 'currency' => mb_strtoupper((string) config('proximus.currency', 'HNL')),
+                'warehouse_code' => $warehouse->code,
+                'warehouse_name' => $warehouse->name,
                 'customer_code' => $customer->code,
                 'customer_name' => $customer->business_name,
                 'customer_address' => $customer->address,

@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['category_id', 'brand_id', 'base_unit_id', 'sku', 'name', 'slug', 'description', 'image_path', 'allows_decimal', 'is_active'])]
+#[Fillable(['category_id', 'brand_id', 'base_unit_id', 'sku', 'name', 'slug', 'description', 'image_path', 'allows_decimal', 'tracks_lots', 'tracks_expiration', 'is_active'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -54,6 +54,21 @@ class Product extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function inventoryStocks(): HasMany
+    {
+        return $this->hasMany(InventoryStock::class);
+    }
+
+    public function inventoryMovements(): HasMany
+    {
+        return $this->hasMany(InventoryMovement::class);
+    }
+
+    public function inventoryReservations(): HasMany
+    {
+        return $this->hasMany(InventoryReservation::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
@@ -63,6 +78,8 @@ class Product extends Model
     {
         return [
             'allows_decimal' => 'boolean',
+            'tracks_lots' => 'boolean',
+            'tracks_expiration' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

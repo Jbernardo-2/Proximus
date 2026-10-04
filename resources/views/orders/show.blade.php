@@ -18,6 +18,19 @@
             <section class="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900"><p class="font-bold">Pedido cancelado</p><p class="mt-1 whitespace-pre-line text-sm">{{ $order->cancellation_reason }}</p></section>
         @endif
 
+        @if ($order->status === \App\OrderStatus::Confirmed)
+            <section class="card overflow-hidden">
+                <div class="border-b border-stone-100 px-5 py-4"><h2 class="font-bold text-ink-950">Compromiso de inventario</h2><p class="text-sm text-ink-600">El pedido reserva la cantidad solicitada en {{ $order->warehouse_name }}. Un disponible negativo señala lo que falta abastecer.</p></div>
+                <div class="grid divide-y divide-stone-100 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-3">
+                    @foreach($order->items->groupBy('product_id') as $productId => $productItems)
+                        @php($stock = $inventoryStocks->get($productId))
+                        @php($available = $stock?->availableQuantity() ?? '0.000000')
+                        <article class="p-5"><p class="font-bold">{{ $productItems->first()->product_name }}</p><p class="mt-2 text-sm text-ink-600">Físico: <strong class="text-ink-950">{{ rtrim(rtrim($stock?->quantity_on_hand ?? '0.000000', '0'), '.') }}</strong> · Comprometido: <strong class="text-ink-950">{{ rtrim(rtrim($stock?->quantity_reserved ?? '0.000000', '0'), '.') }}</strong></p><p class="mt-2 text-sm font-black {{ bccomp($available, '0', 6) < 0 ? 'text-red-700' : 'text-emerald-700' }}">Disponible: {{ rtrim(rtrim($available, '0'), '.') }} {{ $productItems->first()->base_unit_symbol }}</p></article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
             <div class="space-y-6">
                 @if ($canUpdate)
@@ -78,7 +91,7 @@
                                     @foreach ($order->items as $item)
                                         <tr class="align-top">
                                             <td class="table-cell"><p class="font-semibold text-ink-950">{{ $item->product_name }}</p><p class="text-xs text-ink-600">{{ $item->product_sku }} · {{ $item->presentation_name }}</p>@if($item->notes)<p class="mt-1 text-xs text-ink-600">{{ $item->notes }}</p>@endif</td>
-                                            <td class="table-cell"><p class="font-semibold text-ink-950">{{ rtrim(rtrim($item->quantity, '0'), '.') }} {{ $item->presentation_name }}</p><p class="text-xs text-ink-600">{{ rtrim(rtrim($item->base_quantity, '0'), '.') }} {{ $item->base_unit_symbol }} base</p></td>
+                                            <td class="table-cell"><p class="font-semibold text-ink-950">{{ rtrim(rtrim($item->quantity, '0'), '.') }} {{ $item->presentation_name }}</p><p class="text-xs text-ink-600">{{ rtrim(rtrim($item->base_quantity, '0'), '.') }} {{ $item->base_unit_symbol }} base</p>@if($item->inventoryReservation)<span class="mt-1 inline-flex rounded-full {{ $item->inventoryReservation->status === \App\InventoryReservationStatus::Active ? 'bg-mint-100 text-leaf-700' : 'bg-stone-100 text-stone-700' }} px-2 py-0.5 text-[11px] font-bold">Reserva {{ mb_strtolower($item->inventoryReservation->status->label()) }}</span>@endif</td>
                                             <td class="table-cell"><p class="font-semibold text-ink-950">{{ $order->currency }} {{ number_format((float) $item->unit_price, 2) }}</p><p class="text-xs text-ink-600">{{ $item->price_source->label() }}</p>@if($item->price_source === \App\OrderPriceSource::Override)<p class="mt-1 max-w-xs text-xs text-amber-700">{{ $item->override_reason }} · {{ $item->priceOverriddenBy?->name }}</p>@endif</td>
                                             <td class="table-cell text-right font-black text-ink-950">{{ $order->currency }} {{ number_format((float) $item->line_total, 2) }}</td>
                                             @if ($canUpdate)
@@ -129,7 +142,7 @@
                         </div>
                         <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
                             <h3 class="font-bold text-emerald-950">Confirmar para bodega</h3>
-                            <p class="mt-1 text-sm leading-6 text-emerald-900">Al confirmar, productos, cantidades y precios quedan bloqueados. Esta fase todavía no descuenta inventario.</p>
+                            <p class="mt-1 text-sm leading-6 text-emerald-900">Al confirmar, productos, cantidades y precios quedan bloqueados. La mercancía se compromete en {{ $order->warehouse_name }}; si falta stock, el pedido mostrará la diferencia pendiente sin ocultarla.</p>
                             <form class="mt-4" method="POST" action="{{ route('orders.confirm', $order) }}" data-confirm="¿Confirmar el pedido? Después solo supervisión podrá reabrirlo.">@csrf<button class="btn-primary" type="submit">Confirmar pedido</button></form>
                         </div>
                     </section>
@@ -142,6 +155,7 @@
                     <dl class="mt-4 space-y-3 text-sm">
                         <div><dt class="text-xs font-semibold text-ink-600 uppercase">Dirección guardada</dt><dd class="mt-1 whitespace-pre-line text-ink-800">{{ $order->customer_address }}</dd></div>
                         <div><dt class="text-xs font-semibold text-ink-600 uppercase">Entrega solicitada</dt><dd class="mt-1 font-semibold text-ink-950">{{ $order->requested_delivery_date?->format('d/m/Y') ?: 'Sin fecha definida' }}</dd></div>
+                        <div><dt class="text-xs font-semibold text-ink-600 uppercase">Bodega asignada</dt><dd class="mt-1 font-semibold text-ink-950">{{ $order->warehouse_name ?: 'Sin asignar' }}</dd>@if($order->warehouse_code)<dd class="text-xs text-ink-600">{{ $order->warehouse_code }}</dd>@endif</div>
                         @if($order->route_name)<div><dt class="text-xs font-semibold text-ink-600 uppercase">Visita de ruta</dt><dd class="mt-1 text-ink-800">{{ $order->route_code }} · {{ \App\Weekday::tryFrom((int) $order->route_visit_day)?->label() }} · parada #{{ $order->route_visit_order }}</dd></div>@endif
                         <div><dt class="text-xs font-semibold text-ink-600 uppercase">Registrado por</dt><dd class="mt-1 text-ink-800">{{ $order->creator->name }}</dd></div>
                         @if($order->client_reference)<div><dt class="text-xs font-semibold text-ink-600 uppercase">Referencia de sincronización</dt><dd class="mt-1 break-all font-mono text-xs text-ink-800">{{ $order->client_reference }}</dd></div>@endif
@@ -153,6 +167,7 @@
                         <h2 class="font-bold text-ink-950">Editar encabezado</h2>
                         <form method="POST" action="{{ route('orders.update', $order) }}" class="mt-4 space-y-4">
                             @csrf @method('PUT')
+                            <div><label class="form-label" for="warehouse_id_header">Bodega</label><select class="form-input" id="warehouse_id_header" name="warehouse_id" required>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected(old('warehouse_id', $order->warehouse_id) === $warehouse->id)>{{ $warehouse->name }} · {{ $warehouse->code }}</option>@endforeach</select></div>
                             <div><label class="form-label" for="payment_term_header">Condición de pago</label><select class="form-input" id="payment_term_header" name="payment_term" required>@foreach($paymentTerms as $term)<option value="{{ $term->value }}" @selected(old('payment_term', $order->payment_term->value) === $term->value)>{{ $term->label() }}</option>@endforeach</select></div>
                             <div><label class="form-label" for="requested_delivery_date_header">Entrega solicitada</label><input class="form-input" id="requested_delivery_date_header" name="requested_delivery_date" type="date" min="{{ $order->order_date->toDateString() }}" value="{{ old('requested_delivery_date', $order->requested_delivery_date?->toDateString()) }}"></div>
                             <div><label class="form-label" for="notes_header">Notas</label><textarea class="form-input min-h-24" id="notes_header" name="notes" maxlength="2000">{{ old('notes', $order->notes) }}</textarea></div>

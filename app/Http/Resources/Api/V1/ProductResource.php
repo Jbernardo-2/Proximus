@@ -18,6 +18,8 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'image_url' => $this->image_path === null ? null : Storage::disk('public')->url($this->image_path),
             'allows_decimal' => $this->allows_decimal,
+            'tracks_lots' => $this->tracks_lots,
+            'tracks_expiration' => $this->tracks_expiration,
             'is_active' => $this->is_active,
             'category' => new CategoryResource($this->whenLoaded('category')),
             'brand' => new BrandResource($this->whenLoaded('brand')),

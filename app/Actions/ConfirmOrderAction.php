@@ -10,7 +10,10 @@ use Illuminate\Validation\ValidationException;
 
 class ConfirmOrderAction
 {
-    public function __construct(private RecalculateOrderTotalsAction $recalculateTotals) {}
+    public function __construct(
+        private RecalculateOrderTotalsAction $recalculateTotals,
+        private ReserveOrderStockAction $reserveStock,
+    ) {}
 
     public function handle(Order $order, User $actor): Order
     {
@@ -30,6 +33,7 @@ class ConfirmOrderAction
             }
 
             $this->recalculateTotals->handle($lockedOrder);
+            $this->reserveStock->handle($lockedOrder, $actor);
             $lockedOrder->forceFill([
                 'status' => OrderStatus::Confirmed,
                 'confirmed_at' => now(),
@@ -42,7 +46,7 @@ class ConfirmOrderAction
                 'from_status' => OrderStatus::Draft,
                 'to_status' => OrderStatus::Confirmed,
                 'changed_by' => $actor->id,
-                'reason' => 'Pedido confirmado para preparación en bodega.',
+                'reason' => 'Pedido confirmado y mercancía comprometida para preparación en bodega.',
             ]);
 
             return $lockedOrder;

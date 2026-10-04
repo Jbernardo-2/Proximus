@@ -23,6 +23,7 @@ class StoreOrderRequest extends OrderRequest
             'client_reference' => $this->nullableString('client_reference'),
             'route_stop_id' => $this->nullableIdentifier('route_stop_id'),
             'salesperson_id' => $this->nullableIdentifier('salesperson_id'),
+            'warehouse_id' => $this->nullableIdentifier('warehouse_id'),
             'order_date' => $this->input('order_date') ?: now()->toDateString(),
             'requested_delivery_date' => $this->nullableIdentifier('requested_delivery_date'),
             'notes' => $this->nullableString('notes'),
@@ -53,6 +54,11 @@ class StoreOrderRequest extends OrderRequest
                         ->where('role', UserRole::Preventista->value)
                         ->where('is_active', true),
                 ),
+            ],
+            'warehouse_id' => [
+                'nullable',
+                'ulid',
+                Rule::exists('warehouses', 'id')->where('is_active', true),
             ],
             'order_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'requested_delivery_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:order_date'],

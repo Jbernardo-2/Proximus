@@ -18,7 +18,7 @@
                     <div class="grid size-28 shrink-0 place-items-center rounded-2xl bg-mint-100 text-4xl font-black text-leaf-700">{{ str($product->name)->substr(0, 1)->upper() }}</div>
                 @endif
                 <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2"><x-status-badge :active="$product->is_active" /><span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">{{ $product->allows_decimal ? 'Admite decimales' : 'Cantidades enteras' }}</span></div>
+                    <div class="flex flex-wrap items-center gap-2"><x-status-badge :active="$product->is_active" /><span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">{{ $product->allows_decimal ? 'Admite decimales' : 'Cantidades enteras' }}</span>@if($product->tracks_lots)<span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800">Control por lote</span>@endif @if($product->tracks_expiration)<span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Control de vencimiento</span>@endif</div>
                     <h2 class="mt-3 text-2xl font-black tracking-tight text-ink-950">{{ $product->name }}</h2>
                     <p class="mt-2 text-sm leading-6 text-ink-600">{{ $product->description ?: 'Sin descripción registrada.' }}</p>
                     <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-3">

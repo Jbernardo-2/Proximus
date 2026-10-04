@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\Product;
+use App\Models\Warehouse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,11 @@ class CreateProductAction
 
         try {
             return DB::transaction(function () use ($data, $imagePath): Product {
+                $warehouses = Warehouse::query()
+                    ->active()
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
                 $product = Product::query()->create([
                     ...Arr::only($data, [
                         'category_id',
@@ -28,6 +34,8 @@ class CreateProductAction
                         'slug',
                         'description',
                         'allows_decimal',
+                        'tracks_lots',
+                        'tracks_expiration',
                         'is_active',
                     ]),
                     'image_path' => $imagePath,
@@ -43,6 +51,15 @@ class CreateProductAction
                     'is_purchasable' => $data['base_is_purchasable'],
                     'is_active' => true,
                 ]);
+
+                foreach ($warehouses as $warehouse) {
+                    $product->inventoryStocks()->create([
+                        'warehouse_id' => $warehouse->id,
+                        'quantity_on_hand' => '0.000000',
+                        'quantity_reserved' => '0.000000',
+                        'reorder_point' => '0.000000',
+                    ]);
+                }
 
                 return $product->load(['category', 'brand', 'baseUnit', 'basePresentation.priceTiers', 'presentations.priceTiers']);
             });

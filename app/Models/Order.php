@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['order_number', 'client_reference', 'customer_id', 'sales_route_id', 'route_stop_id', 'salesperson_id', 'created_by', 'order_date', 'requested_delivery_date', 'payment_term', 'status', 'currency', 'customer_code', 'customer_name', 'customer_address', 'route_code', 'route_name', 'route_visit_day', 'route_visit_order', 'salesperson_name', 'notes', 'subtotal', 'total', 'confirmed_at', 'confirmed_by', 'cancelled_at', 'cancelled_by', 'cancellation_reason'])]
+#[Fillable(['order_number', 'client_reference', 'customer_id', 'sales_route_id', 'route_stop_id', 'salesperson_id', 'created_by', 'warehouse_id', 'order_date', 'requested_delivery_date', 'payment_term', 'status', 'currency', 'warehouse_code', 'warehouse_name', 'customer_code', 'customer_name', 'customer_address', 'route_code', 'route_name', 'route_visit_day', 'route_visit_order', 'salesperson_name', 'notes', 'subtotal', 'total', 'confirmed_at', 'confirmed_by', 'cancelled_at', 'cancelled_by', 'cancellation_reason'])]
 class Order extends Model
 {
     /** @use HasFactory<OrderFactory> */
@@ -45,6 +45,11 @@ class Order extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
     public function confirmedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmed_by');
@@ -68,6 +73,16 @@ class Order extends Model
     public function statusHistory(): HasMany
     {
         return $this->hasMany(OrderStatusHistory::class);
+    }
+
+    public function inventoryReservations(): HasMany
+    {
+        return $this->hasMany(InventoryReservation::class);
+    }
+
+    public function inventoryMovements(): HasMany
+    {
+        return $this->hasMany(InventoryMovement::class);
     }
 
     public function scopeVisibleTo(Builder $query, User $user): Builder

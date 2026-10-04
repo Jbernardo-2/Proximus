@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['order_id', 'product_id', 'product_presentation_id', 'price_tier_id', 'product_sku', 'product_name', 'presentation_name', 'base_unit_symbol', 'conversion_factor', 'quantity', 'base_quantity', 'standard_unit_price', 'unit_price', 'price_source', 'price_overridden_by', 'override_reason', 'line_total', 'notes'])]
 class OrderItem extends Model
@@ -39,6 +40,11 @@ class OrderItem extends Model
     public function priceOverriddenBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'price_overridden_by');
+    }
+
+    public function inventoryReservation(): HasOne
+    {
+        return $this->hasOne(InventoryReservation::class);
     }
 
     protected function casts(): array

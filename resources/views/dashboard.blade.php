@@ -2,11 +2,13 @@
 
 @section('title', 'Resumen')
 @section('page-title', 'Resumen de la operación')
-@section('page-subtitle', 'Clientes, rutas, preventa y catálogo en una sola operación.')
+@section('page-subtitle', 'Clientes, rutas, preventa, inventario y catálogo en una sola operación.')
 
 @section('header-actions')
     @can('manage-orders')
         <a href="{{ route('orders.create') }}" class="btn-primary">＋ <span class="hidden sm:inline">Nuevo pedido</span></a>
+    @elsecan('operate-inventory')
+        <a href="{{ route('inventory-documents.create') }}" class="btn-primary">＋ <span class="hidden sm:inline">Movimiento</span></a>
     @elsecan('manage-customers')
         <a href="{{ route('customers.create') }}" class="btn-primary">＋ <span class="hidden sm:inline">Nuevo cliente</span></a>
     @elsecan('manage-catalog')
@@ -29,6 +31,10 @@
 
             if (auth()->user()->canViewOrders()) {
                 $cards[] = ['label' => 'Pedidos', 'value' => $metrics['orders'], 'hint' => $metrics['draft_orders'].' borradores · '.$metrics['confirmed_orders'].' confirmados', 'accent' => 'bg-emerald-600'];
+            }
+
+            if (auth()->user()->canViewInventory()) {
+                $cards[] = ['label' => 'Inventario', 'value' => $metrics['inventory_products'], 'hint' => $metrics['inventory_shortages'].' faltantes · '.$metrics['inventory_low'].' por reponer', 'accent' => 'bg-teal-600'];
             }
 
             if (auth()->user()->canManageCatalog()) {

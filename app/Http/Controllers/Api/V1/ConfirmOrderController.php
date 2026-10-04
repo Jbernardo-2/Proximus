@@ -19,6 +19,11 @@ class ConfirmOrderController extends Controller
         $user = $request->user();
         $confirmedOrder = $confirmOrder->handle($order, $user);
 
-        return new OrderResource($confirmedOrder->load(['creator', 'confirmedBy'])->loadCount('items'));
+        return new OrderResource($confirmedOrder->load([
+            'warehouse',
+            'creator',
+            'confirmedBy',
+            'items.inventoryReservation',
+        ])->loadCount('items'));
     }
 }

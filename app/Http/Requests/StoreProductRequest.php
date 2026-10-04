@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreProductRequest extends CatalogRequest
 {
@@ -12,6 +13,8 @@ class StoreProductRequest extends CatalogRequest
         $this->merge([
             'sku' => $this->string('sku')->trim()->upper()->toString(),
             'slug' => Str::slug($this->string('name')->toString()),
+            'tracks_lots' => $this->boolean('tracks_lots'),
+            'tracks_expiration' => $this->boolean('tracks_expiration'),
         ]);
     }
 
@@ -27,6 +30,8 @@ class StoreProductRequest extends CatalogRequest
             'description' => ['nullable', 'string', 'max:4000'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
             'allows_decimal' => ['required', 'boolean'],
+            'tracks_lots' => ['required', 'boolean'],
+            'tracks_expiration' => ['required', 'boolean'],
             'is_active' => ['required', 'boolean'],
             'base_presentation_name' => ['required', 'string', 'max:120'],
             'base_barcode' => ['nullable', 'string', 'max:80', Rule::unique('product_presentations', 'barcode')],
@@ -34,5 +39,14 @@ class StoreProductRequest extends CatalogRequest
             'base_is_sellable' => ['required', 'boolean'],
             'base_is_purchasable' => ['required', 'boolean'],
         ];
+    }
+
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($this->boolean('tracks_expiration') && ! $this->boolean('tracks_lots')) {
+                $validator->errors()->add('tracks_lots', 'Para controlar vencimientos también debes activar el control por lotes.');
+            }
+        }];
     }
 }

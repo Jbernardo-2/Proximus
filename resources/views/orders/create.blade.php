@@ -55,6 +55,15 @@
         <section class="card p-5 sm:p-7">
             <div class="mb-6"><h2 class="text-lg font-black text-ink-950">Condiciones del pedido</h2><p class="text-sm text-ink-600">Este documento es interno y no genera una factura fiscal.</p></div>
             <div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                <div>
+                    <label class="form-label" for="warehouse_id">Bodega que preparará *</label>
+                    <select class="form-input" id="warehouse_id" name="warehouse_id" required>
+                        @foreach ($warehouses as $warehouse)
+                            <option value="{{ $warehouse->id }}" @selected(old('warehouse_id', $warehouses->firstWhere('is_default', true)?->id ?? $warehouses->first()?->id) === $warehouse->id)>{{ $warehouse->name }} · {{ $warehouse->code }}</option>
+                        @endforeach
+                    </select>
+                    @if ($warehouses->isEmpty())<p class="form-help text-red-700">No hay bodegas activas. Solicita a supervisión que configure una.</p>@endif
+                </div>
                 <div><label class="form-label" for="order_date">Fecha del pedido *</label><input class="form-input" id="order_date" name="order_date" type="date" max="{{ now()->toDateString() }}" required value="{{ old('order_date', now()->toDateString()) }}"></div>
                 <div><label class="form-label" for="requested_delivery_date">Entrega solicitada</label><input class="form-input" id="requested_delivery_date" name="requested_delivery_date" type="date" value="{{ old('requested_delivery_date') }}"></div>
                 <div><label class="form-label" for="payment_term">Condición de pago *</label><select class="form-input" id="payment_term" name="payment_term" required>@foreach($paymentTerms as $term)<option value="{{ $term->value }}" @selected(old('payment_term', \App\PaymentTerm::Cash->value) === $term->value)>{{ $term->label() }}</option>@endforeach</select></div>
@@ -64,7 +73,7 @@
 
         <div class="flex flex-wrap justify-end gap-3">
             <a class="btn-secondary" href="{{ route('orders.index') }}">Cancelar</a>
-            <button class="btn-primary" @disabled($routeStops->isEmpty() && $isPreventista)>Crear borrador y agregar productos →</button>
+            <button class="btn-primary" @disabled(($routeStops->isEmpty() && $isPreventista) || $warehouses->isEmpty())>Crear borrador y agregar productos →</button>
         </div>
     </form>
 @endsection

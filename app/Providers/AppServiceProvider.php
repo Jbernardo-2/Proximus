@@ -2,11 +2,19 @@
 
 namespace App\Providers;
 
+use App\Models\InventoryCount;
+use App\Models\InventoryDocument;
+use App\Models\InventoryStock;
 use App\Models\Order;
 use App\Models\SalesRoute;
 use App\Models\User;
+use App\Models\Warehouse;
+use App\Policies\InventoryCountPolicy;
+use App\Policies\InventoryDocumentPolicy;
+use App\Policies\InventoryStockPolicy;
 use App\Policies\OrderPolicy;
 use App\Policies\SalesRoutePolicy;
+use App\Policies\WarehousePolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -40,9 +48,17 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manage-routes', fn (User $user): bool => $user->canManageRoutes());
         Gate::define('view-orders', fn (User $user): bool => $user->canViewOrders());
         Gate::define('manage-orders', fn (User $user): bool => $user->canManageOrders());
+        Gate::define('view-inventory', fn (User $user): bool => $user->canViewInventory());
+        Gate::define('operate-inventory', fn (User $user): bool => $user->canOperateInventory());
+        Gate::define('adjust-inventory', fn (User $user): bool => $user->canAdjustInventory());
+        Gate::define('configure-inventory', fn (User $user): bool => $user->canConfigureInventory());
         Gate::define('manage-users', fn (User $user): bool => $user->canManageUsers());
         Gate::policy(SalesRoute::class, SalesRoutePolicy::class);
         Gate::policy(Order::class, OrderPolicy::class);
+        Gate::policy(Warehouse::class, WarehousePolicy::class);
+        Gate::policy(InventoryStock::class, InventoryStockPolicy::class);
+        Gate::policy(InventoryDocument::class, InventoryDocumentPolicy::class);
+        Gate::policy(InventoryCount::class, InventoryCountPolicy::class);
 
         Password::defaults(fn (): Password => Password::min(12)
             ->max(128)

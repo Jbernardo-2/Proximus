@@ -33,6 +33,14 @@ class OrderItemResource extends JsonResource
             'override_reason' => $this->override_reason,
             'line_total' => $this->line_total,
             'notes' => $this->notes,
+            'inventory_reservation' => $this->whenLoaded('inventoryReservation', fn (): ?array => $this->inventoryReservation === null ? null : [
+                'id' => $this->inventoryReservation->id,
+                'base_quantity' => $this->inventoryReservation->base_quantity,
+                'status' => $this->inventoryReservation->status->value,
+                'status_label' => $this->inventoryReservation->status->label(),
+                'reserved_at' => $this->inventoryReservation->reserved_at?->toISOString(),
+                'released_at' => $this->inventoryReservation->released_at?->toISOString(),
+            ]),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
