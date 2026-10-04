@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\ArchiveProductAction;
 use App\Actions\CreateProductAction;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
@@ -117,9 +118,9 @@ class ProductController extends Controller
         return redirect()->route('products.show', $product)->with('success', 'Producto actualizado correctamente.');
     }
 
-    public function destroy(Product $product): RedirectResponse
+    public function destroy(Product $product, ArchiveProductAction $archiveProduct): RedirectResponse
     {
-        $product->delete();
+        $archiveProduct->handle($product);
 
         return redirect()->route('products.index')->with('success', 'Producto archivado correctamente.');
     }

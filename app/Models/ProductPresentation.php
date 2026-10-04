@@ -38,6 +38,16 @@ class ProductPresentation extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function inventoryDocumentItems(): HasMany
+    {
+        return $this->hasMany(InventoryDocumentItem::class);
+    }
+
+    public function inventoryMovements(): HasMany
+    {
+        return $this->hasMany(InventoryMovement::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

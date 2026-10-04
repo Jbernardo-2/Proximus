@@ -13,6 +13,7 @@ abstract class OrderRequest extends FormRequest
             'customer_id' => 'cliente',
             'route_stop_id' => 'visita programada',
             'salesperson_id' => 'preventista',
+            'warehouse_id' => 'bodega',
             'order_date' => 'fecha del pedido',
             'requested_delivery_date' => 'fecha solicitada de entrega',
             'payment_term' => 'condición de pago',

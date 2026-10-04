@@ -66,6 +66,26 @@ enum UserRole: string
         return in_array($this, [self::Admin, self::Supervisor], true);
     }
 
+    public function canViewInventory(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor, self::Preventista, self::Bodeguero], true);
+    }
+
+    public function canOperateInventory(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero], true);
+    }
+
+    public function canAdjustInventory(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
+    public function canConfigureInventory(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
     public function canManageUsers(): bool
     {
         return $this === self::Admin;
@@ -108,6 +128,22 @@ enum UserRole: string
 
         if ($this->canManageOrderLifecycle()) {
             $abilities[] = 'orders:lifecycle';
+        }
+
+        if ($this->canViewInventory()) {
+            $abilities[] = 'inventory:view';
+        }
+
+        if ($this->canOperateInventory()) {
+            $abilities[] = 'inventory:operate';
+        }
+
+        if ($this->canAdjustInventory()) {
+            $abilities[] = 'inventory:adjust';
+        }
+
+        if ($this->canConfigureInventory()) {
+            $abilities[] = 'inventory:configure';
         }
 
         if ($this->canManageUsers()) {

@@ -19,6 +19,7 @@ class UpdateOrderRequest extends OrderRequest
     {
         $this->merge([
             'requested_delivery_date' => $this->nullableIdentifier('requested_delivery_date'),
+            'warehouse_id' => $this->nullableIdentifier('warehouse_id'),
             'notes' => $this->nullableString('notes'),
         ]);
     }
@@ -29,6 +30,11 @@ class UpdateOrderRequest extends OrderRequest
         $order = $this->route('order');
 
         return [
+            'warehouse_id' => [
+                'nullable',
+                'ulid',
+                Rule::exists('warehouses', 'id')->where('is_active', true),
+            ],
             'requested_delivery_date' => [
                 'nullable',
                 'date_format:Y-m-d',

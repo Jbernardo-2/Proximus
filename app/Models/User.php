@@ -29,6 +29,16 @@ class User extends Authenticatable
         return $this->hasMany(SalesRoute::class, 'driver_id');
     }
 
+    public function createdInventoryDocuments(): HasMany
+    {
+        return $this->hasMany(InventoryDocument::class, 'created_by');
+    }
+
+    public function createdInventoryCounts(): HasMany
+    {
+        return $this->hasMany(InventoryCount::class, 'created_by');
+    }
+
     public function canAccessPanel(): bool
     {
         return $this->is_active && $this->role->canAccessPanel();
@@ -77,6 +87,26 @@ class User extends Authenticatable
     public function canManageOrderLifecycle(): bool
     {
         return $this->is_active && $this->role->canManageOrderLifecycle();
+    }
+
+    public function canViewInventory(): bool
+    {
+        return $this->is_active && $this->role->canViewInventory();
+    }
+
+    public function canOperateInventory(): bool
+    {
+        return $this->is_active && $this->role->canOperateInventory();
+    }
+
+    public function canAdjustInventory(): bool
+    {
+        return $this->is_active && $this->role->canAdjustInventory();
+    }
+
+    public function canConfigureInventory(): bool
+    {
+        return $this->is_active && $this->role->canConfigureInventory();
     }
 
     /**

@@ -22,6 +22,11 @@ class Supplier extends Model
         return $this->hasMany(ProductSupplier::class);
     }
 
+    public function inventoryDocuments(): HasMany
+    {
+        return $this->hasMany(InventoryDocument::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

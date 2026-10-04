@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Customer;
+use App\Models\InventoryStock;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\SalesRoute;
@@ -40,6 +41,17 @@ class DashboardController extends Controller
             $metrics['orders'] = (clone $orderQuery)->count();
             $metrics['draft_orders'] = (clone $orderQuery)->where('status', OrderStatus::Draft->value)->count();
             $metrics['confirmed_orders'] = (clone $orderQuery)->where('status', OrderStatus::Confirmed->value)->count();
+        }
+
+        if ($user->canViewInventory()) {
+            $metrics['inventory_products'] = InventoryStock::query()->count();
+            $metrics['inventory_shortages'] = InventoryStock::query()
+                ->whereColumn('quantity_on_hand', '<', 'quantity_reserved')
+                ->count();
+            $metrics['inventory_low'] = InventoryStock::query()
+                ->whereColumn('quantity_on_hand', '>=', 'quantity_reserved')
+                ->whereRaw('(quantity_on_hand - quantity_reserved) <= reorder_point')
+                ->count();
         }
 
         if ($user->canManageCatalog()) {

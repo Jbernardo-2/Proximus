@@ -26,6 +26,8 @@ class ProductFactory extends Factory
             'description' => fake()->optional()->sentence(),
             'image_path' => null,
             'allows_decimal' => false,
+            'tracks_lots' => false,
+            'tracks_expiration' => false,
             'is_active' => true,
         ];
     }

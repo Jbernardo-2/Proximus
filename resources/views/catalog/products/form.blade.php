@@ -81,6 +81,10 @@
                     @endif
                 </div>
                 <div class="space-y-3"><input type="hidden" name="allows_decimal" value="0"><label class="flex items-start gap-3 rounded-xl border border-stone-200 p-4"><input class="mt-0.5 size-4 rounded border-stone-300 text-leaf-700" type="checkbox" name="allows_decimal" value="1" @checked((bool) old('allows_decimal', $product->allows_decimal))><span><span class="block text-sm font-semibold">Admite cantidades decimales</span><span class="text-xs text-ink-600">Para peso, volumen o fracciones.</span></span></label><input type="hidden" name="is_active" value="0"><label class="flex items-start gap-3 rounded-xl border border-stone-200 p-4"><input class="mt-0.5 size-4 rounded border-stone-300 text-leaf-700" type="checkbox" name="is_active" value="1" @checked((bool) old('is_active', $product->exists ? $product->is_active : true))><span><span class="block text-sm font-semibold">Producto activo</span><span class="text-xs text-ink-600">Disponible para la operación.</span></span></label></div>
+                <div class="space-y-3">
+                    <input type="hidden" name="tracks_lots" value="0"><label class="flex items-start gap-3 rounded-xl border border-stone-200 p-4"><input class="mt-0.5 size-4 rounded border-stone-300 text-leaf-700" type="checkbox" name="tracks_lots" value="1" @checked((bool) old('tracks_lots', $product->tracks_lots))><span><span class="block text-sm font-semibold">Controlar lotes</span><span class="text-xs text-ink-600">El lote será obligatorio en cada entrada o salida.</span></span></label>
+                    <input type="hidden" name="tracks_expiration" value="0"><label class="flex items-start gap-3 rounded-xl border border-stone-200 p-4"><input class="mt-0.5 size-4 rounded border-stone-300 text-leaf-700" type="checkbox" name="tracks_expiration" value="1" @checked((bool) old('tracks_expiration', $product->tracks_expiration))><span><span class="block text-sm font-semibold">Controlar vencimiento</span><span class="text-xs text-ink-600">Requiere también el control por lotes.</span></span></label>
+                </div>
             </div>
         </section>
 

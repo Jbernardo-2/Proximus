@@ -33,7 +33,11 @@ class ApiAuthenticationTest extends TestCase
             ->assertJsonPath('abilities.5', 'orders:manage')
             ->assertJsonPath('abilities.6', 'orders:override')
             ->assertJsonPath('abilities.7', 'orders:lifecycle')
-            ->assertJsonPath('abilities.8', 'users:manage')
+            ->assertJsonPath('abilities.8', 'inventory:view')
+            ->assertJsonPath('abilities.9', 'inventory:operate')
+            ->assertJsonPath('abilities.10', 'inventory:adjust')
+            ->assertJsonPath('abilities.11', 'inventory:configure')
+            ->assertJsonPath('abilities.12', 'users:manage')
             ->assertJsonPath('user.email', $user->email)
             ->assertJsonPath('user.role', 'admin')
             ->assertJsonPath('expires_at', fn (mixed $expiresAt): bool => is_string($expiresAt) && $expiresAt !== '');
@@ -43,7 +47,7 @@ class ApiAuthenticationTest extends TestCase
         ]);
         $accessToken = $user->tokens()->firstOrFail();
         $this->assertSame(
-            ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'users:manage'],
+            ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'users:manage'],
             $accessToken->abilities,
         );
         $this->assertNotNull($accessToken->expires_at);

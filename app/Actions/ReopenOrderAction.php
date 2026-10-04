@@ -10,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 
 class ReopenOrderAction
 {
+    public function __construct(private ReleaseOrderStockAction $releaseStock) {}
+
     public function handle(Order $order, User $actor, string $reason): Order
     {
         return DB::transaction(function () use ($order, $actor, $reason): Order {
@@ -22,6 +24,11 @@ class ReopenOrderAction
             }
 
             $previousStatus = $lockedOrder->status;
+
+            if ($previousStatus === OrderStatus::Confirmed) {
+                $this->releaseStock->handle($lockedOrder, $actor, 'Reserva liberada al reabrir el pedido: '.$reason);
+            }
+
             $lockedOrder->forceFill([
                 'status' => OrderStatus::Draft,
                 'confirmed_at' => null,

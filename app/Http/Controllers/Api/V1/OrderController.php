@@ -86,11 +86,12 @@ class OrderController extends Controller
     private function loadOrder(Order $order): Order
     {
         return $order->load([
+            'warehouse',
             'creator',
             'confirmedBy',
             'cancelledBy',
             'items' => fn ($query) => $query
-                ->with('priceOverriddenBy')
+                ->with(['priceOverriddenBy', 'inventoryReservation'])
                 ->orderBy('product_name')
                 ->orderBy('presentation_name')
                 ->orderBy('id'),

@@ -7,10 +7,12 @@ use App\Actions\UpdateOrderAction;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\UpdateOrderRequest;
 use App\Models\Customer;
+use App\Models\InventoryStock;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\RouteStop;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\OrderStatus;
 use App\PaymentTerm;
 use App\Services\OrderConversionSuggestionService;
@@ -102,6 +104,7 @@ class OrderController extends Controller
             'salespeople' => $salespeople,
             'selectedRouteStop' => $selectedRouteStop,
             'paymentTerms' => PaymentTerm::cases(),
+            'warehouses' => Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->get(),
             'isPreventista' => $user->role === UserRole::Preventista,
         ]);
     }
@@ -129,10 +132,11 @@ class OrderController extends Controller
             'routeStop',
             'salesperson',
             'creator',
+            'warehouse',
             'confirmedBy',
             'cancelledBy',
             'items' => fn ($query) => $query
-                ->with(['product', 'presentation', 'priceOverriddenBy'])
+                ->with(['product', 'presentation', 'priceOverriddenBy', 'inventoryReservation'])
                 ->orderBy('product_name')
                 ->orderBy('presentation_name')
                 ->orderBy('id'),
@@ -159,6 +163,9 @@ class OrderController extends Controller
             'order' => $order,
             'products' => $products,
             'paymentTerms' => PaymentTerm::cases(),
+            'warehouses' => $canUpdate
+                ? Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->get()
+                : collect(),
             'canUpdate' => $canUpdate,
             'canOverridePrice' => Gate::forUser($user)->allows('overridePrice', $order),
             'canCancel' => Gate::forUser($user)->allows('cancel', $order),
@@ -166,6 +173,13 @@ class OrderController extends Controller
             'conversionSuggestions' => $canUpdate && $order->items->isNotEmpty()
                 ? $conversionSuggestions->forOrder($order)
                 : [],
+            'inventoryStocks' => $order->warehouse_id === null
+                ? collect()
+                : InventoryStock::query()
+                    ->where('warehouse_id', $order->warehouse_id)
+                    ->whereIn('product_id', $order->items->pluck('product_id'))
+                    ->get()
+                    ->keyBy('product_id'),
         ]);
     }
 

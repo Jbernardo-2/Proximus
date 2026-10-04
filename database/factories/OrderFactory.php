@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\OrderStatus;
 use App\PaymentTerm;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -29,11 +30,14 @@ class OrderFactory extends Factory
             'route_stop_id' => null,
             'salesperson_id' => User::factory()->preventista(),
             'created_by' => User::factory()->supervisor(),
+            'warehouse_id' => Warehouse::factory(),
             'order_date' => now()->toDateString(),
             'requested_delivery_date' => null,
             'payment_term' => PaymentTerm::Cash,
             'status' => OrderStatus::Draft,
             'currency' => 'HNL',
+            'warehouse_code' => 'BOD-001',
+            'warehouse_name' => 'Bodega principal',
             'customer_code' => fake()->unique()->numerify('CLI-####'),
             'customer_name' => fake()->company(),
             'customer_address' => fake()->address(),

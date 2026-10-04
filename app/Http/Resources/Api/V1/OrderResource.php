@@ -21,6 +21,11 @@ class OrderResource extends JsonResource
             'order_date' => $this->order_date?->toDateString(),
             'requested_delivery_date' => $this->requested_delivery_date?->toDateString(),
             'currency' => $this->currency,
+            'warehouse' => $this->warehouse_id === null ? null : [
+                'id' => $this->warehouse_id,
+                'code' => $this->warehouse_code,
+                'name' => $this->warehouse_name,
+            ],
             'customer' => [
                 'id' => $this->customer_id,
                 'code' => $this->customer_code,

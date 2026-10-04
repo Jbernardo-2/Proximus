@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\ArchiveProductAction;
 use App\Actions\CreateProductAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProductRequest;
@@ -79,9 +80,9 @@ class ProductController extends Controller
         return new ProductResource($this->loadProduct($product->refresh()));
     }
 
-    public function destroy(Product $product): JsonResponse
+    public function destroy(Product $product, ArchiveProductAction $archiveProduct): JsonResponse
     {
-        $product->delete();
+        $archiveProduct->handle($product);
 
         return response()->json(null, 204);
     }

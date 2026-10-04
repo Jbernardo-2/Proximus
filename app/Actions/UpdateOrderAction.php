@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\Order;
+use App\Models\Warehouse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -20,7 +21,20 @@ class UpdateOrderAction
                 ]);
             }
 
+            $warehouse = isset($data['warehouse_id'])
+                ? Warehouse::query()->active()->findOrFail($data['warehouse_id'])
+                : Warehouse::query()->active()->find($lockedOrder->warehouse_id);
+
+            if ($warehouse === null || ! $warehouse->is_active) {
+                throw ValidationException::withMessages([
+                    'warehouse_id' => ['Selecciona una bodega activa.'],
+                ]);
+            }
+
             $lockedOrder->update([
+                'warehouse_id' => $warehouse->id,
+                'warehouse_code' => $warehouse->code,
+                'warehouse_name' => $warehouse->name,
                 'payment_term' => $data['payment_term'],
                 'requested_delivery_date' => $data['requested_delivery_date'] ?? null,
                 'notes' => $data['notes'] ?? null,
