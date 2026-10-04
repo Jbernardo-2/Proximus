@@ -12,11 +12,11 @@ class OperationsAccessTest extends TestCase
     public static function roles(): array
     {
         return [
-            'admin' => [UserRole::Admin, true, true, true, true, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'users:manage']],
-            'supervisor' => [UserRole::Supervisor, true, true, true, true, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure']],
+            'admin' => [UserRole::Admin, true, true, true, true, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage', 'users:manage']],
+            'supervisor' => [UserRole::Supervisor, true, true, true, true, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage']],
             'preventista' => [UserRole::Preventista, true, true, true, false, true, true, false, false, true, false, false, false, ['customers:manage', 'routes:view', 'orders:view', 'orders:manage', 'inventory:view']],
-            'bodeguero' => [UserRole::Bodeguero, true, false, false, false, true, false, false, false, true, true, false, false, ['catalog:manage', 'orders:view', 'inventory:view', 'inventory:operate']],
-            'repartidor' => [UserRole::Repartidor, false, false, false, false, false, false, false, false, false, false, false, false, []],
+            'bodeguero' => [UserRole::Bodeguero, true, false, false, false, true, false, false, false, true, true, false, false, ['catalog:manage', 'orders:view', 'inventory:view', 'inventory:operate', 'deliveries:view', 'deliveries:prepare']],
+            'repartidor' => [UserRole::Repartidor, false, false, false, false, false, false, false, false, false, false, false, false, ['deliveries:view', 'deliveries:execute']],
         ];
     }
 

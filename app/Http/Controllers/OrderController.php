@@ -140,6 +140,10 @@ class OrderController extends Controller
                 ->orderBy('product_name')
                 ->orderBy('presentation_name')
                 ->orderBy('id'),
+            'deliveryRunOrders' => fn ($query) => $query
+                ->with('deliveryRun')
+                ->latest()
+                ->orderByDesc('id'),
             'statusHistory' => fn ($query) => $query->with('changedBy')->latest()->orderByDesc('id'),
         ]);
         $canUpdate = Gate::forUser($user)->allows('update', $order);
@@ -170,6 +174,7 @@ class OrderController extends Controller
             'canOverridePrice' => Gate::forUser($user)->allows('overridePrice', $order),
             'canCancel' => Gate::forUser($user)->allows('cancel', $order),
             'canReopen' => Gate::forUser($user)->allows('reopen', $order),
+            'canViewDeliveries' => $user->canViewDeliveries(),
             'conversionSuggestions' => $canUpdate && $order->items->isNotEmpty()
                 ? $conversionSuggestions->forOrder($order)
                 : [],

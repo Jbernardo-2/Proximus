@@ -11,7 +11,7 @@ class WarehouseFactory extends Factory
     public function definition(): array
     {
         return [
-            'code' => fake()->unique()->bothify('BOD-###'),
+            'code' => fake()->unique()->bothify('BOD-TEST-####-????'),
             'name' => fake()->unique()->company().' Bodega',
             'address' => fake()->optional()->address(),
             'is_default' => false,

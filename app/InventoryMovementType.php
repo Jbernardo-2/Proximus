@@ -14,6 +14,8 @@ enum InventoryMovementType: string
     case PhysicalCountOut = 'physical_count_out';
     case OrderReservation = 'order_reservation';
     case OrderReservationRelease = 'order_reservation_release';
+    case DispatchLoad = 'dispatch_load';
+    case DispatchReturn = 'dispatch_return';
 
     public function label(): string
     {
@@ -28,6 +30,8 @@ enum InventoryMovementType: string
             self::PhysicalCountOut => 'Diferencia negativa de conteo',
             self::OrderReservation => 'Reserva de pedido',
             self::OrderReservationRelease => 'Liberación de pedido',
+            self::DispatchLoad => 'Carga para reparto',
+            self::DispatchReturn => 'Retorno de reparto',
         };
     }
 

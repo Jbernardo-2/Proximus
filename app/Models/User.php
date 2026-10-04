@@ -39,6 +39,16 @@ class User extends Authenticatable
         return $this->hasMany(InventoryCount::class, 'created_by');
     }
 
+    public function drivenDeliveryRuns(): HasMany
+    {
+        return $this->hasMany(DeliveryRun::class, 'driver_id');
+    }
+
+    public function createdDeliveryRuns(): HasMany
+    {
+        return $this->hasMany(DeliveryRun::class, 'created_by');
+    }
+
     public function canAccessPanel(): bool
     {
         return $this->is_active && $this->role->canAccessPanel();
@@ -107,6 +117,36 @@ class User extends Authenticatable
     public function canConfigureInventory(): bool
     {
         return $this->is_active && $this->role->canConfigureInventory();
+    }
+
+    public function canViewDeliveries(): bool
+    {
+        return $this->is_active && $this->role->canViewDeliveries();
+    }
+
+    public function canManageDeliveries(): bool
+    {
+        return $this->is_active && $this->role->canManageDeliveries();
+    }
+
+    public function canPrepareDeliveries(): bool
+    {
+        return $this->is_active && $this->role->canPrepareDeliveries();
+    }
+
+    public function canExecuteDeliveries(): bool
+    {
+        return $this->is_active && $this->role->canExecuteDeliveries();
+    }
+
+    public function canSettleDeliveries(): bool
+    {
+        return $this->is_active && $this->role->canSettleDeliveries();
+    }
+
+    public function canManageVehicles(): bool
+    {
+        return $this->is_active && $this->role->canManageVehicles();
     }
 
     /**

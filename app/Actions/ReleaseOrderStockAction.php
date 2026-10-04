@@ -52,6 +52,8 @@ class ReleaseOrderStockAction
                     'status' => InventoryReservationStatus::Released,
                     'released_at' => now(),
                     'released_by' => $actor->id,
+                    'fulfilled_at' => null,
+                    'fulfilled_by' => null,
                 ])->save();
             }
         });

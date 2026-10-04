@@ -2,12 +2,19 @@
 
 use App\Http\Controllers\Api\V1\AuthTokenController;
 use App\Http\Controllers\Api\V1\BrandController;
+use App\Http\Controllers\Api\V1\CancelDeliveryRunController;
 use App\Http\Controllers\Api\V1\CancelInventoryCountController;
 use App\Http\Controllers\Api\V1\CancelInventoryDocumentController;
 use App\Http\Controllers\Api\V1\CancelOrderController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\CompleteDeliveryStopController;
+use App\Http\Controllers\Api\V1\ConfirmDeliveryLoadController;
 use App\Http\Controllers\Api\V1\ConfirmOrderController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\DeliveryPaymentController;
+use App\Http\Controllers\Api\V1\DeliveryRunController;
+use App\Http\Controllers\Api\V1\DeliveryRunOrderController;
+use App\Http\Controllers\Api\V1\DepartDeliveryRunController;
 use App\Http\Controllers\Api\V1\InventoryCountController;
 use App\Http\Controllers\Api\V1\InventoryDocumentController;
 use App\Http\Controllers\Api\V1\InventoryDocumentItemController;
@@ -26,10 +33,16 @@ use App\Http\Controllers\Api\V1\ProductConversionPreviewController;
 use App\Http\Controllers\Api\V1\ProductPresentationController;
 use App\Http\Controllers\Api\V1\ProductSupplierController;
 use App\Http\Controllers\Api\V1\ReopenOrderController;
+use App\Http\Controllers\Api\V1\RequeueDeliveryOrderController;
 use App\Http\Controllers\Api\V1\RouteStopController;
 use App\Http\Controllers\Api\V1\SalesRouteController;
+use App\Http\Controllers\Api\V1\SettleDeliveryRunController;
+use App\Http\Controllers\Api\V1\StartDeliveryPreparationController;
 use App\Http\Controllers\Api\V1\SupplierController;
+use App\Http\Controllers\Api\V1\UpdateDeliveryPreparationController;
 use App\Http\Controllers\Api\V1\UserController;
+use App\Http\Controllers\Api\V1\VehicleController;
+use App\Http\Controllers\Api\V1\VoidDeliveryPaymentController;
 use App\Http\Controllers\Api\V1\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
@@ -101,6 +114,65 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
         Route::middleware(['abilities:orders:lifecycle', 'can:view-orders'])->group(function (): void {
             Route::post('/orders/{order}/cancel', CancelOrderController::class)->name('orders.cancel');
             Route::post('/orders/{order}/reopen', ReopenOrderController::class)->name('orders.reopen');
+        });
+
+        Route::middleware(['abilities:deliveries:view', 'can:view-deliveries'])->group(function (): void {
+            Route::get('/delivery-runs', [DeliveryRunController::class, 'index'])->name('delivery-runs.index');
+            Route::get('/delivery-runs/{deliveryRun}', [DeliveryRunController::class, 'show'])->name('delivery-runs.show');
+            Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles.index');
+            Route::get('/vehicles/{vehicle}', [VehicleController::class, 'show'])->name('vehicles.show');
+        });
+
+        Route::middleware(['abilities:deliveries:manage', 'can:manage-deliveries'])->group(function (): void {
+            Route::post('/delivery-runs', [DeliveryRunController::class, 'store'])->name('delivery-runs.store');
+            Route::put('/delivery-runs/{deliveryRun}', [DeliveryRunController::class, 'update'])->name('delivery-runs.update');
+            Route::post('/delivery-runs/{deliveryRun}/cancel', CancelDeliveryRunController::class)
+                ->name('delivery-runs.cancel');
+
+            Route::scopeBindings()->group(function (): void {
+                Route::post('/delivery-runs/{deliveryRun}/orders', [DeliveryRunOrderController::class, 'store'])
+                    ->name('delivery-runs.orders.store');
+                Route::delete('/delivery-runs/{deliveryRun}/orders/{runOrder}', [DeliveryRunOrderController::class, 'destroy'])
+                    ->name('delivery-runs.orders.destroy');
+            });
+        });
+
+        Route::middleware(['abilities:deliveries:prepare', 'can:prepare-deliveries'])->group(function (): void {
+            Route::post('/delivery-runs/{deliveryRun}/preparation', StartDeliveryPreparationController::class)
+                ->name('delivery-runs.preparation.start');
+            Route::put('/delivery-runs/{deliveryRun}/preparation', UpdateDeliveryPreparationController::class)
+                ->name('delivery-runs.preparation.update');
+            Route::post('/delivery-runs/{deliveryRun}/load', ConfirmDeliveryLoadController::class)
+                ->name('delivery-runs.load');
+        });
+
+        Route::middleware(['abilities:deliveries:execute', 'can:execute-deliveries'])->group(function (): void {
+            Route::post('/delivery-runs/{deliveryRun}/depart', DepartDeliveryRunController::class)
+                ->name('delivery-runs.depart');
+
+            Route::scopeBindings()->group(function (): void {
+                Route::put('/delivery-runs/{deliveryRun}/orders/{runOrder}/outcome', CompleteDeliveryStopController::class)
+                    ->name('delivery-runs.orders.outcome');
+                Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/payments', [DeliveryPaymentController::class, 'store'])
+                    ->name('delivery-runs.orders.payments.store');
+            });
+        });
+
+        Route::middleware(['abilities:deliveries:settle', 'can:settle-deliveries'])->group(function (): void {
+            Route::post('/delivery-runs/{deliveryRun}/settle', SettleDeliveryRunController::class)
+                ->name('delivery-runs.settle');
+
+            Route::scopeBindings()->group(function (): void {
+                Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/payments/{payment}/void', VoidDeliveryPaymentController::class)
+                    ->name('delivery-runs.orders.payments.void');
+                Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/requeue', RequeueDeliveryOrderController::class)
+                    ->name('delivery-runs.orders.requeue');
+            });
+        });
+
+        Route::middleware(['abilities:vehicles:manage', 'can:manage-vehicles'])->group(function (): void {
+            Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
+            Route::put('/vehicles/{vehicle}', [VehicleController::class, 'update'])->name('vehicles.update');
         });
 
         Route::middleware(['abilities:inventory:view', 'can:view-inventory'])->group(function (): void {

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['order_id', 'order_item_id', 'warehouse_id', 'product_id', 'base_quantity', 'status', 'reserved_at', 'released_at', 'created_by', 'released_by'])]
+#[Fillable(['order_id', 'order_item_id', 'warehouse_id', 'product_id', 'base_quantity', 'status', 'reserved_at', 'released_at', 'fulfilled_at', 'created_by', 'released_by', 'fulfilled_by'])]
 class InventoryReservation extends Model
 {
     /** @use HasFactory<InventoryReservationFactory> */
@@ -46,6 +46,11 @@ class InventoryReservation extends Model
         return $this->belongsTo(User::class, 'released_by');
     }
 
+    public function fulfilledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'fulfilled_by');
+    }
+
     protected function casts(): array
     {
         return [
@@ -53,6 +58,7 @@ class InventoryReservation extends Model
             'status' => InventoryReservationStatus::class,
             'reserved_at' => 'datetime',
             'released_at' => 'datetime',
+            'fulfilled_at' => 'datetime',
         ];
     }
 }

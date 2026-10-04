@@ -29,7 +29,15 @@ class OrderPolicy
         return match ($user->role) {
             UserRole::Admin, UserRole::Supervisor => true,
             UserRole::Preventista => $order->salesperson_id === $user->id,
-            UserRole::Bodeguero => $order->status === OrderStatus::Confirmed,
+            UserRole::Bodeguero => in_array($order->status, [
+                OrderStatus::Confirmed,
+                OrderStatus::Assigned,
+                OrderStatus::Loaded,
+                OrderStatus::InTransit,
+                OrderStatus::Delivered,
+                OrderStatus::PartiallyDelivered,
+                OrderStatus::NotDelivered,
+            ], true),
             default => false,
         };
     }
@@ -75,7 +83,11 @@ class OrderPolicy
 
     public function cancel(User $user, Order $order): bool
     {
-        return $user->canManageOrderLifecycle() && $order->status !== OrderStatus::Cancelled;
+        return $user->canManageOrderLifecycle() && in_array(
+            $order->status,
+            [OrderStatus::Draft, OrderStatus::Confirmed],
+            true,
+        );
     }
 
     public function reopen(User $user, Order $order): bool

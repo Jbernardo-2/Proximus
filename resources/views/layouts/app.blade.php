@@ -22,7 +22,7 @@
                     <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard') ? 'nav-link-active' : '' }}">
                         <span class="text-base">⌂</span> Resumen
                     </a>
-                    @if (auth()->user()->can('manage-customers') || auth()->user()->can('view-routes') || auth()->user()->can('view-orders') || auth()->user()->can('view-inventory'))
+                    @if (auth()->user()->can('manage-customers') || auth()->user()->can('view-routes') || auth()->user()->can('view-orders') || auth()->user()->can('view-deliveries') || auth()->user()->can('view-inventory'))
                         <p class="px-3 pb-1 pt-6 text-[11px] font-semibold tracking-[0.16em] text-stone-500 uppercase">Operación</p>
                         @can('manage-customers')
                             <a href="{{ route('customers.index') }}" class="nav-link {{ request()->routeIs('customers.*') ? 'nav-link-active' : '' }}">
@@ -37,6 +37,11 @@
                         @can('view-orders')
                             <a href="{{ route('orders.index') }}" class="nav-link {{ request()->routeIs('orders.*') ? 'nav-link-active' : '' }}">
                                 <span class="text-base">▤</span> Pedidos
+                            </a>
+                        @endcan
+                        @can('view-deliveries')
+                            <a href="{{ route('delivery-runs.index') }}" class="nav-link {{ request()->routeIs('delivery-runs.*', 'vehicles.*') ? 'nav-link-active' : '' }}">
+                                <span class="text-base">▰</span> Reparto
                             </a>
                         @endcan
                         @can('view-inventory')
@@ -108,6 +113,9 @@
                         @endcan
                         @can('view-orders')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('orders.index') }}">Pedidos</a>
+                        @endcan
+                        @can('view-deliveries')
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('delivery-runs.index') }}">Reparto</a>
                         @endcan
                         @can('view-inventory')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('inventory.index') }}">Inventario</a>

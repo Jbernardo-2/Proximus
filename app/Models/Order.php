@@ -85,12 +85,25 @@ class Order extends Model
         return $this->hasMany(InventoryMovement::class);
     }
 
+    public function deliveryRunOrders(): HasMany
+    {
+        return $this->hasMany(DeliveryRunOrder::class);
+    }
+
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         return match ($user->role) {
             UserRole::Admin, UserRole::Supervisor => $query,
             UserRole::Preventista => $query->where('salesperson_id', $user->id),
-            UserRole::Bodeguero => $query->where('status', OrderStatus::Confirmed->value),
+            UserRole::Bodeguero => $query->whereIn('status', [
+                OrderStatus::Confirmed->value,
+                OrderStatus::Assigned->value,
+                OrderStatus::Loaded->value,
+                OrderStatus::InTransit->value,
+                OrderStatus::Delivered->value,
+                OrderStatus::PartiallyDelivered->value,
+                OrderStatus::NotDelivered->value,
+            ]),
             default => $query->whereNull('id'),
         };
     }
