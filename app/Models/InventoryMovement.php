@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['warehouse_id', 'product_id', 'product_presentation_id', 'inventory_document_id', 'inventory_count_id', 'order_id', 'order_item_id', 'type', 'occurred_at', 'quantity_on_hand_delta', 'quantity_reserved_delta', 'quantity_on_hand_after', 'quantity_reserved_after', 'presentation_quantity', 'conversion_factor', 'product_sku', 'product_name', 'presentation_name', 'base_unit_symbol', 'reference_number', 'lot_number', 'expiration_date', 'reason', 'created_by'])]
+#[Fillable(['warehouse_id', 'product_id', 'product_presentation_id', 'inventory_document_id', 'inventory_count_id', 'order_id', 'order_item_id', 'delivery_run_id', 'delivery_run_order_id', 'delivery_run_item_id', 'type', 'occurred_at', 'quantity_on_hand_delta', 'quantity_reserved_delta', 'quantity_on_hand_after', 'quantity_reserved_after', 'presentation_quantity', 'conversion_factor', 'product_sku', 'product_name', 'presentation_name', 'base_unit_symbol', 'reference_number', 'lot_number', 'expiration_date', 'reason', 'created_by'])]
 class InventoryMovement extends Model
 {
     /** @use HasFactory<InventoryMovementFactory> */
@@ -49,6 +49,21 @@ class InventoryMovement extends Model
     public function orderItem(): BelongsTo
     {
         return $this->belongsTo(OrderItem::class);
+    }
+
+    public function deliveryRun(): BelongsTo
+    {
+        return $this->belongsTo(DeliveryRun::class);
+    }
+
+    public function deliveryRunOrder(): BelongsTo
+    {
+        return $this->belongsTo(DeliveryRunOrder::class);
+    }
+
+    public function deliveryRunItem(): BelongsTo
+    {
+        return $this->belongsTo(DeliveryRunItem::class);
     }
 
     public function creator(): BelongsTo

@@ -42,6 +42,11 @@ class Warehouse extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function deliveryRuns(): HasMany
+    {
+        return $this->hasMany(DeliveryRun::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

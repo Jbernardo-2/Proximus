@@ -78,8 +78,10 @@ class ReserveOrderStockAction
                         'status' => InventoryReservationStatus::Active,
                         'reserved_at' => now(),
                         'released_at' => null,
+                        'fulfilled_at' => null,
                         'created_by' => $actor->id,
                         'released_by' => null,
+                        'fulfilled_by' => null,
                     ],
                 );
             }

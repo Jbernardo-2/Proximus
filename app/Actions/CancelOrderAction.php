@@ -17,9 +17,9 @@ class CancelOrderAction
         return DB::transaction(function () use ($order, $actor, $reason): Order {
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
 
-            if ($lockedOrder->status === OrderStatus::Cancelled) {
+            if (! in_array($lockedOrder->status, [OrderStatus::Draft, OrderStatus::Confirmed], true)) {
                 throw ValidationException::withMessages([
-                    'order' => ['El pedido ya está cancelado.'],
+                    'order' => ['Solo puedes cancelar pedidos en borrador o confirmados que todavía no estén asignados a reparto.'],
                 ]);
             }
 

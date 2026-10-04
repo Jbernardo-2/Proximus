@@ -2,8 +2,10 @@
 
 namespace App\Actions;
 
+use App\DeliveryRunStatus;
 use App\InventoryCountStatus;
 use App\InventoryDocumentStatus;
+use App\Models\DeliveryRunItem;
 use App\Models\InventoryCountItem;
 use App\Models\InventoryDocumentItem;
 use App\Models\InventoryStock;
@@ -43,6 +45,16 @@ class ArchiveProductAction
                 || InventoryCountItem::query()
                     ->where('product_id', $lockedProduct->id)
                     ->whereHas('inventoryCount', fn ($query) => $query->where('status', InventoryCountStatus::Draft->value))
+                    ->exists()
+                || DeliveryRunItem::query()
+                    ->where('product_id', $lockedProduct->id)
+                    ->whereHas(
+                        'deliveryRunOrder.deliveryRun',
+                        fn ($query) => $query->whereNotIn('status', [
+                            DeliveryRunStatus::Settled->value,
+                            DeliveryRunStatus::Cancelled->value,
+                        ]),
+                    )
                     ->exists();
 
             if ($hasOpenOperation) {

@@ -18,6 +18,31 @@
             <section class="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900"><p class="font-bold">Pedido cancelado</p><p class="mt-1 whitespace-pre-line text-sm">{{ $order->cancellation_reason }}</p></section>
         @endif
 
+        @if ($order->deliveryRunOrders->isNotEmpty())
+            <section class="card overflow-hidden">
+                <div class="border-b border-stone-100 px-5 py-4">
+                    <h2 class="font-bold text-ink-950">Seguimiento de reparto</h2>
+                    <p class="text-sm text-ink-600">Conserva cada intento de entrega, incluso cuando el pedido vuelve a programarse.</p>
+                </div>
+                <div class="divide-y divide-stone-100">
+                    @foreach ($order->deliveryRunOrders as $assignment)
+                        <article class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                            <div>
+                                <p class="font-bold text-ink-950">{{ $assignment->deliveryRun->run_number }}</p>
+                                <p class="text-xs text-ink-600">{{ $assignment->deliveryRun->scheduled_date->format('d/m/Y') }} · parada #{{ $assignment->visit_order }}</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <x-delivery-order-status-badge :status="$assignment->status" />
+                                @if ($canViewDeliveries)
+                                    <a class="text-sm font-bold text-leaf-700 hover:text-leaf-800" href="{{ route('delivery-runs.show', $assignment->deliveryRun) }}">Ver jornada →</a>
+                                @endif
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         @if ($order->status === \App\OrderStatus::Confirmed)
             <section class="card overflow-hidden">
                 <div class="border-b border-stone-100 px-5 py-4"><h2 class="font-bold text-ink-950">Compromiso de inventario</h2><p class="text-sm text-ink-600">El pedido reserva la cantidad solicitada en {{ $order->warehouse_name }}. Un disponible negativo señala lo que falta abastecer.</p></div>

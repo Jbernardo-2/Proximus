@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\DeliveryRunStatus;
 use App\Models\User;
 use App\UserRole;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,7 @@ class UpdateUserAction
 
             $this->ensureActorKeepsAdministrativeAccess($actor, $managedUser, $newRole, $willBeActive);
             $this->ensureAnActiveAdministratorRemains($managedUser, $newRole, $willBeActive);
+            $this->ensureOpenDeliveryAssignmentKeepsDriverAvailable($managedUser, $newRole, $willBeActive);
 
             $passwordChanged = array_key_exists('password', $data) && filled($data['password']);
 
@@ -82,5 +84,34 @@ class UpdateUserAction
                 'role' => ['Debe permanecer al menos un administrador activo.'],
             ]);
         }
+    }
+
+    private function ensureOpenDeliveryAssignmentKeepsDriverAvailable(
+        User $managedUser,
+        UserRole $newRole,
+        bool $willBeActive,
+    ): void {
+        if ($managedUser->role !== UserRole::Repartidor
+            || ($newRole === UserRole::Repartidor && $willBeActive)) {
+            return;
+        }
+
+        $hasOpenRun = $managedUser->drivenDeliveryRuns()
+            ->whereIn('status', collect(DeliveryRunStatus::cases())
+                ->filter(fn (DeliveryRunStatus $status): bool => $status->isOpen())
+                ->map->value)
+            ->exists();
+
+        if (! $hasOpenRun) {
+            return;
+        }
+
+        $field = $willBeActive ? 'role' : 'is_active';
+
+        throw ValidationException::withMessages([
+            $field => [
+                'No puedes cambiar el acceso del repartidor mientras tenga una jornada abierta.',
+            ],
+        ]);
     }
 }

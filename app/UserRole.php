@@ -86,6 +86,36 @@ enum UserRole: string
         return in_array($this, [self::Admin, self::Supervisor], true);
     }
 
+    public function canViewDeliveries(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero, self::Repartidor], true);
+    }
+
+    public function canManageDeliveries(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
+    public function canPrepareDeliveries(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero], true);
+    }
+
+    public function canExecuteDeliveries(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor, self::Repartidor], true);
+    }
+
+    public function canSettleDeliveries(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
+    public function canManageVehicles(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
     public function canManageUsers(): bool
     {
         return $this === self::Admin;
@@ -144,6 +174,30 @@ enum UserRole: string
 
         if ($this->canConfigureInventory()) {
             $abilities[] = 'inventory:configure';
+        }
+
+        if ($this->canViewDeliveries()) {
+            $abilities[] = 'deliveries:view';
+        }
+
+        if ($this->canManageDeliveries()) {
+            $abilities[] = 'deliveries:manage';
+        }
+
+        if ($this->canPrepareDeliveries()) {
+            $abilities[] = 'deliveries:prepare';
+        }
+
+        if ($this->canExecuteDeliveries()) {
+            $abilities[] = 'deliveries:execute';
+        }
+
+        if ($this->canSettleDeliveries()) {
+            $abilities[] = 'deliveries:settle';
+        }
+
+        if ($this->canManageVehicles()) {
+            $abilities[] = 'vehicles:manage';
         }
 
         if ($this->canManageUsers()) {
