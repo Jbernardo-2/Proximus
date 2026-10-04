@@ -2,8 +2,12 @@
 
 @section('title', 'Rutas')
 @section('page-title', 'Rutas')
-@section('page-subtitle', 'Configura responsables y el calendario semanal de visitas.')
-@section('header-actions')<a href="{{ route('routes.create') }}" class="btn-primary">＋ <span class="hidden sm:inline">Nueva ruta</span></a>@endsection
+@section('page-subtitle')
+    {{ auth()->user()->can('manage-routes') ? 'Configura responsables y el calendario semanal de visitas.' : 'Consulta tus rutas asignadas y toma pedidos desde cada visita.' }}
+@endsection
+@section('header-actions')
+    @can('manage-routes')<a href="{{ route('routes.create') }}" class="btn-primary">＋ <span class="hidden sm:inline">Nueva ruta</span></a>@endcan
+@endsection
 
 @section('content')
     <div class="card overflow-hidden">

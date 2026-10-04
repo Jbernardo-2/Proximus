@@ -2,14 +2,21 @@
 
 use App\Http\Controllers\Api\V1\AuthTokenController;
 use App\Http\Controllers\Api\V1\BrandController;
+use App\Http\Controllers\Api\V1\CancelOrderController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\ConfirmOrderController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\MeasurementUnitController;
+use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\OrderConversionSuggestionController;
+use App\Http\Controllers\Api\V1\OrderItemController;
+use App\Http\Controllers\Api\V1\OrderItemQuoteController;
 use App\Http\Controllers\Api\V1\PriceTierController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductConversionPreviewController;
 use App\Http\Controllers\Api\V1\ProductPresentationController;
 use App\Http\Controllers\Api\V1\ProductSupplierController;
+use App\Http\Controllers\Api\V1\ReopenOrderController;
 use App\Http\Controllers\Api\V1\RouteStopController;
 use App\Http\Controllers\Api\V1\SalesRouteController;
 use App\Http\Controllers\Api\V1\SupplierController;
@@ -32,20 +39,58 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
             Route::apiResource('customers', CustomerController::class);
         });
 
+        Route::middleware(['abilities:routes:view', 'can:view-routes'])->group(function (): void {
+            Route::get('/routes', [SalesRouteController::class, 'index'])->name('routes.index');
+            Route::get('/routes/{salesRoute}', [SalesRouteController::class, 'show'])->name('routes.show');
+
+            Route::scopeBindings()->group(function (): void {
+                Route::get('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'show'])
+                    ->name('routes.stops.show');
+            });
+        });
+
         Route::middleware(['abilities:routes:manage', 'can:manage-routes'])->group(function (): void {
-            Route::apiResource('routes', SalesRouteController::class)
-                ->parameters(['routes' => 'salesRoute']);
+            Route::post('/routes', [SalesRouteController::class, 'store'])->name('routes.store');
+            Route::put('/routes/{salesRoute}', [SalesRouteController::class, 'update'])->name('routes.update');
+            Route::delete('/routes/{salesRoute}', [SalesRouteController::class, 'destroy'])->name('routes.destroy');
 
             Route::scopeBindings()->group(function (): void {
                 Route::post('/routes/{salesRoute}/stops', [RouteStopController::class, 'store'])
                     ->name('routes.stops.store');
-                Route::get('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'show'])
-                    ->name('routes.stops.show');
                 Route::put('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'update'])
                     ->name('routes.stops.update');
                 Route::delete('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'destroy'])
                     ->name('routes.stops.destroy');
             });
+        });
+
+        Route::middleware(['abilities:orders:view', 'can:view-orders'])->group(function (): void {
+            Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+            Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+        });
+
+        Route::middleware(['abilities:orders:manage', 'can:manage-orders'])->group(function (): void {
+            Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+            Route::put('/orders/{order}', [OrderController::class, 'update'])->name('orders.update');
+            Route::get('/orders/{order}/item-quote', OrderItemQuoteController::class)
+                ->name('orders.item-quote');
+            Route::get('/orders/{order}/conversion-suggestions', OrderConversionSuggestionController::class)
+                ->name('orders.conversion-suggestions');
+            Route::post('/orders/{order}/confirm', ConfirmOrderController::class)->name('orders.confirm');
+
+            Route::scopeBindings()->group(function (): void {
+                Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])
+                    ->name('orders.items.store');
+                Route::put('/orders/{order}/items/{orderItem}', [OrderItemController::class, 'update'])
+                    ->name('orders.items.update');
+                Route::delete('/orders/{order}/items/{orderItem}', [OrderItemController::class, 'destroy'])
+                    ->name('orders.items.destroy');
+            });
+        });
+
+        Route::middleware(['abilities:orders:lifecycle', 'can:view-orders'])->group(function (): void {
+            Route::post('/orders/{order}/cancel', CancelOrderController::class)->name('orders.cancel');
+            Route::post('/orders/{order}/reopen', ReopenOrderController::class)->name('orders.reopen');
         });
 
         Route::middleware(['abilities:catalog:manage', 'can:manage-catalog'])->group(function (): void {

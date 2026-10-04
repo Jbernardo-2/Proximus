@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Customer;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\SalesRoute;
 use App\Models\Supplier;
 use App\Models\User;
+use App\OrderStatus;
+use App\UserRole;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -25,9 +28,18 @@ class DashboardController extends Controller
             $metrics['active_customers'] = Customer::query()->active()->count();
         }
 
-        if ($user->canManageRoutes()) {
-            $metrics['routes'] = SalesRoute::query()->count();
-            $metrics['active_routes'] = SalesRoute::query()->active()->count();
+        if ($user->canViewRoutes()) {
+            $routeQuery = SalesRoute::query()
+                ->when($user->role === UserRole::Preventista, fn ($query) => $query->where('salesperson_id', $user->id));
+            $metrics['routes'] = (clone $routeQuery)->count();
+            $metrics['active_routes'] = (clone $routeQuery)->active()->count();
+        }
+
+        if ($user->canViewOrders()) {
+            $orderQuery = Order::query()->visibleTo($user);
+            $metrics['orders'] = (clone $orderQuery)->count();
+            $metrics['draft_orders'] = (clone $orderQuery)->where('status', OrderStatus::Draft->value)->count();
+            $metrics['confirmed_orders'] = (clone $orderQuery)->where('status', OrderStatus::Confirmed->value)->count();
         }
 
         if ($user->canManageCatalog()) {
@@ -47,7 +59,13 @@ class DashboardController extends Controller
                 ->limit(6)
                 ->get() : collect(),
             'recentCustomers' => $user->canManageCustomers() ? Customer::query()
-                ->withCount('routeStops')
+                ->withCount(['routeStops' => fn ($query) => $query->visibleTo($user)])
+                ->latest()
+                ->orderByDesc('id')
+                ->limit(6)
+                ->get() : collect(),
+            'recentOrders' => $user->canViewOrders() ? Order::query()
+                ->visibleTo($user)
                 ->latest()
                 ->orderByDesc('id')
                 ->limit(6)

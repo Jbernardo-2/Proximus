@@ -22,16 +22,21 @@
                     <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard') ? 'nav-link-active' : '' }}">
                         <span class="text-base">⌂</span> Resumen
                     </a>
-                    @if (auth()->user()->can('manage-customers') || auth()->user()->can('manage-routes'))
+                    @if (auth()->user()->can('manage-customers') || auth()->user()->can('view-routes') || auth()->user()->can('view-orders'))
                         <p class="px-3 pb-1 pt-6 text-[11px] font-semibold tracking-[0.16em] text-stone-500 uppercase">Operación</p>
                         @can('manage-customers')
                             <a href="{{ route('customers.index') }}" class="nav-link {{ request()->routeIs('customers.*') ? 'nav-link-active' : '' }}">
                                 <span class="text-base">♧</span> Clientes
                             </a>
                         @endcan
-                        @can('manage-routes')
+                        @can('view-routes')
                             <a href="{{ route('routes.index') }}" class="nav-link {{ request()->routeIs('routes.*') ? 'nav-link-active' : '' }}">
                                 <span class="text-base">⌁</span> Rutas
+                            </a>
+                        @endcan
+                        @can('view-orders')
+                            <a href="{{ route('orders.index') }}" class="nav-link {{ request()->routeIs('orders.*') ? 'nav-link-active' : '' }}">
+                                <span class="text-base">▤</span> Pedidos
                             </a>
                         @endcan
                     @endif
@@ -93,8 +98,11 @@
                         @can('manage-customers')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('customers.index') }}">Clientes</a>
                         @endcan
-                        @can('manage-routes')
+                        @can('view-routes')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('routes.index') }}">Rutas</a>
+                        @endcan
+                        @can('view-orders')
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('orders.index') }}">Pedidos</a>
                         @endcan
                         @can('manage-catalog')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('products.index') }}">Productos</a>

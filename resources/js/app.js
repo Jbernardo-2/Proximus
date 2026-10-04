@@ -333,6 +333,102 @@ conversionForm?.addEventListener('submit', async (event) => {
     }
 });
 
+const orderCreateForm = document.querySelector('[data-order-create-form]');
+
+if (orderCreateForm) {
+    const routeStopSelect = orderCreateForm.querySelector('[data-route-stop-select]');
+    const customerSelect = orderCreateForm.querySelector('[data-order-customer-select]');
+    const salespersonSelect = orderCreateForm.querySelector('[data-order-salesperson-select]');
+
+    const applyRouteStop = () => {
+        const option = routeStopSelect?.selectedOptions?.[0];
+
+        if (! option?.value) {
+            return;
+        }
+
+        if (option.dataset.customerId) {
+            customerSelect.value = option.dataset.customerId;
+        }
+
+        if (option.dataset.salespersonId) {
+            salespersonSelect.value = option.dataset.salespersonId;
+        }
+    };
+
+    routeStopSelect?.addEventListener('change', applyRouteStop);
+    applyRouteStop();
+}
+
+document.querySelectorAll('[data-order-item-form]').forEach((form) => {
+    const button = form.querySelector('[data-order-quote-button]');
+    const presentation = form.querySelector('[data-order-presentation-select]');
+    const quantity = form.querySelector('[data-order-quantity-input]');
+    const output = form.querySelector('[data-order-quote-output]');
+
+    button?.addEventListener('click', async () => {
+        if (! presentation.value || ! quantity.value) {
+            showOrderQuoteError(output, 'Selecciona una presentación e indica la cantidad.');
+
+            return;
+        }
+
+        const endpoint = new URL(form.dataset.quoteUrl, window.location.origin);
+        endpoint.searchParams.set('product_presentation_id', presentation.value);
+        endpoint.searchParams.set('quantity', quantity.value);
+        button.disabled = true;
+        output.classList.remove('hidden');
+        output.innerHTML = '<p class="rounded-xl bg-stone-50 p-4 text-sm text-ink-600">Calculando precio y conversión…</p>';
+
+        try {
+            const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+            const payload = await response.json();
+
+            if (! response.ok) {
+                const message = Object.values(payload.errors ?? {}).flat()[0]
+                    ?? payload.message
+                    ?? 'No fue posible calcular el precio.';
+                throw new Error(message);
+            }
+
+            const quote = payload.data;
+            const selected = quote.selected;
+            const suggestion = quote.conversion_suggestion;
+            const components = suggestion.components.map((component) => `
+                <li class="flex items-center justify-between gap-3 border-t border-emerald-100 py-2 first:border-0">
+                    <span><strong>${escapeHtml(component.count)}</strong> × ${escapeHtml(component.name)}</span>
+                    <span class="text-xs text-ink-600">${escapeHtml(component.base_quantity)} ${escapeHtml(suggestion.base_unit.symbol)}</span>
+                </li>
+            `).join('');
+
+            output.innerHTML = `
+                <div class="grid gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 md:grid-cols-2">
+                    <div>
+                        <p class="text-xs font-semibold text-emerald-800 uppercase">Precio calculado</p>
+                        <p class="mt-1 text-xl font-black text-emerald-950">${escapeHtml(selected.line_total)}</p>
+                        <p class="text-sm text-emerald-900">${escapeHtml(selected.quantity)} × ${escapeHtml(selected.standard_unit_price)} · ${selected.price_source === 'price_tier' ? 'precio por cantidad' : 'precio normal'}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-emerald-800 uppercase">Presentaciones sugeridas</p>
+                        <ul class="mt-1 text-sm text-emerald-950">${components || '<li class="py-2">Sin combinación disponible.</li>'}</ul>
+                        ${suggestion.is_exact ? '' : `<p class="mt-1 text-xs text-amber-800">Quedan ${escapeHtml(suggestion.remaining_base_quantity)} ${escapeHtml(suggestion.base_unit.symbol)} sin cubrir.</p>`}
+                    </div>
+                    <p class="md:col-span-2 text-xs text-emerald-900">${escapeHtml(suggestion.notice)}</p>
+                </div>
+            `;
+        } catch (error) {
+            showOrderQuoteError(output, error.message);
+        } finally {
+            button.disabled = false;
+        }
+    });
+});
+
+function showOrderQuoteError(output, message) {
+    output.classList.remove('hidden');
+    output.innerHTML = `<p class="rounded-xl bg-red-50 p-3 text-sm text-red-700">${escapeHtml(message)}</p>`;
+}
+
 function escapeHtml(value) {
     const element = document.createElement('div');
     element.textContent = String(value ?? '');

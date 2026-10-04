@@ -12,11 +12,11 @@ class OperationsAccessTest extends TestCase
     public static function roles(): array
     {
         return [
-            'admin' => [UserRole::Admin, true, true, true, ['catalog:manage', 'customers:manage', 'routes:manage', 'users:manage']],
-            'supervisor' => [UserRole::Supervisor, true, true, true, ['catalog:manage', 'customers:manage', 'routes:manage']],
-            'preventista' => [UserRole::Preventista, true, true, true, ['customers:manage', 'routes:manage']],
-            'bodeguero' => [UserRole::Bodeguero, true, false, false, ['catalog:manage']],
-            'repartidor' => [UserRole::Repartidor, false, false, false, []],
+            'admin' => [UserRole::Admin, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'users:manage']],
+            'supervisor' => [UserRole::Supervisor, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle']],
+            'preventista' => [UserRole::Preventista, true, true, true, false, true, true, false, false, ['customers:manage', 'routes:view', 'orders:view', 'orders:manage']],
+            'bodeguero' => [UserRole::Bodeguero, true, false, false, false, true, false, false, false, ['catalog:manage', 'orders:view']],
+            'repartidor' => [UserRole::Repartidor, false, false, false, false, false, false, false, false, []],
         ];
     }
 
@@ -26,7 +26,12 @@ class OperationsAccessTest extends TestCase
         UserRole $role,
         bool $canAccessPanel,
         bool $canManageCustomers,
+        bool $canViewRoutes,
         bool $canManageRoutes,
+        bool $canViewOrders,
+        bool $canManageOrders,
+        bool $canOverrideOrderPrices,
+        bool $canManageOrderLifecycle,
         array $abilities,
     ): void {
         $user = User::factory()->make([
@@ -36,7 +41,12 @@ class OperationsAccessTest extends TestCase
 
         $this->assertSame($canAccessPanel, $user->canAccessPanel());
         $this->assertSame($canManageCustomers, $user->canManageCustomers());
+        $this->assertSame($canViewRoutes, $user->canViewRoutes());
         $this->assertSame($canManageRoutes, $user->canManageRoutes());
+        $this->assertSame($canViewOrders, $user->canViewOrders());
+        $this->assertSame($canManageOrders, $user->canManageOrders());
+        $this->assertSame($canOverrideOrderPrices, $user->canOverrideOrderPrices());
+        $this->assertSame($canManageOrderLifecycle, $user->canManageOrderLifecycle());
         $this->assertSame($abilities, $user->apiAbilities());
     }
 
@@ -46,7 +56,12 @@ class OperationsAccessTest extends TestCase
 
         $this->assertFalse($user->canAccessPanel());
         $this->assertFalse($user->canManageCustomers());
+        $this->assertFalse($user->canViewRoutes());
         $this->assertFalse($user->canManageRoutes());
+        $this->assertFalse($user->canViewOrders());
+        $this->assertFalse($user->canManageOrders());
+        $this->assertFalse($user->canOverrideOrderPrices());
+        $this->assertFalse($user->canManageOrderLifecycle());
         $this->assertSame([], $user->apiAbilities());
     }
 }

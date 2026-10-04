@@ -2,15 +2,22 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\BrandController;
+use App\Http\Controllers\CancelOrderController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ConfirmOrderController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MeasurementUnitController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\OrderConversionSuggestionController;
+use App\Http\Controllers\OrderItemController;
+use App\Http\Controllers\OrderItemQuoteController;
 use App\Http\Controllers\PriceTierController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductConversionPreviewController;
 use App\Http\Controllers\ProductPresentationController;
 use App\Http\Controllers\ProductSupplierController;
+use App\Http\Controllers\ReopenOrderController;
 use App\Http\Controllers\RouteStopController;
 use App\Http\Controllers\SalesRouteController;
 use App\Http\Controllers\SupplierController;
@@ -72,9 +79,19 @@ Route::middleware(['auth', 'can:manage-customers'])->group(function (): void {
     Route::resource('customers', CustomerController::class);
 });
 
+Route::get('/routes/create', [SalesRouteController::class, 'create'])
+    ->middleware(['auth', 'can:manage-routes'])
+    ->name('routes.create');
+
+Route::middleware(['auth', 'can:view-routes'])->group(function (): void {
+    Route::get('/routes', [SalesRouteController::class, 'index'])->name('routes.index');
+    Route::get('/routes/{salesRoute}', [SalesRouteController::class, 'show'])->name('routes.show');
+});
+
 Route::middleware(['auth', 'can:manage-routes'])->group(function (): void {
     Route::resource('routes', SalesRouteController::class)
-        ->parameters(['routes' => 'salesRoute']);
+        ->parameters(['routes' => 'salesRoute'])
+        ->only(['store', 'edit', 'update', 'destroy']);
 
     Route::scopeBindings()->group(function (): void {
         Route::post('/routes/{salesRoute}/stops', [RouteStopController::class, 'store'])
@@ -84,6 +101,37 @@ Route::middleware(['auth', 'can:manage-routes'])->group(function (): void {
         Route::delete('/routes/{salesRoute}/stops/{stop}', [RouteStopController::class, 'destroy'])
             ->name('routes.stops.destroy');
     });
+});
+
+Route::get('/orders/create', [OrderController::class, 'create'])
+    ->middleware(['auth', 'can:manage-orders'])
+    ->name('orders.create');
+
+Route::middleware(['auth', 'can:view-orders'])->group(function (): void {
+    Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+});
+
+Route::middleware(['auth', 'can:manage-orders'])->group(function (): void {
+    Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+    Route::put('/orders/{order}', [OrderController::class, 'update'])->name('orders.update');
+    Route::get('/orders/{order}/item-quote', OrderItemQuoteController::class)->name('orders.item-quote');
+    Route::get('/orders/{order}/conversion-suggestions', OrderConversionSuggestionController::class)
+        ->name('orders.conversion-suggestions');
+    Route::post('/orders/{order}/confirm', ConfirmOrderController::class)->name('orders.confirm');
+
+    Route::scopeBindings()->group(function (): void {
+        Route::post('/orders/{order}/items', [OrderItemController::class, 'store'])->name('orders.items.store');
+        Route::put('/orders/{order}/items/{orderItem}', [OrderItemController::class, 'update'])
+            ->name('orders.items.update');
+        Route::delete('/orders/{order}/items/{orderItem}', [OrderItemController::class, 'destroy'])
+            ->name('orders.items.destroy');
+    });
+});
+
+Route::middleware(['auth', 'can:view-orders'])->group(function (): void {
+    Route::post('/orders/{order}/cancel', CancelOrderController::class)->name('orders.cancel');
+    Route::post('/orders/{order}/reopen', ReopenOrderController::class)->name('orders.reopen');
 });
 
 Route::middleware(['auth', 'can:manage-users'])->group(function (): void {

@@ -3,7 +3,9 @@
 @section('title', $salesRoute->name)
 @section('page-title', $salesRoute->name)
 @section('page-subtitle', $salesRoute->code.' · '.$salesRoute->stops->count().' visitas programadas')
-@section('header-actions')<a href="{{ route('routes.edit', $salesRoute) }}" class="btn-primary">Editar ruta</a>@endsection
+@section('header-actions')
+    @can('manage-routes')<a href="{{ route('routes.edit', $salesRoute) }}" class="btn-primary">Editar ruta</a>@endcan
+@endsection
 
 @section('content')
     <div class="space-y-6">
@@ -18,7 +20,7 @@
             <section class="card p-5"><p class="text-xs font-semibold text-ink-600 uppercase">Descripción</p><p class="mt-2 whitespace-pre-line text-sm leading-6 text-ink-800">{{ $salesRoute->description }}</p></section>
         @endif
 
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div class="grid gap-6 {{ auth()->user()->can('manage-routes') ? 'xl:grid-cols-[minmax(0,1fr)_24rem]' : '' }}">
             <section class="card overflow-hidden">
                 <div class="border-b border-stone-100 px-5 py-4">
                     <h2 class="font-bold text-ink-950">Calendario de visitas</h2>
@@ -38,6 +40,12 @@
                                         <td class="table-cell"><x-status-badge :active="$stop->is_active" /></td>
                                         <td class="table-cell">
                                             <div class="flex justify-end gap-2">
+                                                @can('manage-orders')
+                                                    @if ($stop->is_active && $stop->customer->is_active && $salesRoute->is_active)
+                                                        <a class="btn-primary min-h-9 px-3 py-1.5" href="{{ route('orders.create', ['route_stop_id' => $stop->id]) }}">Tomar pedido</a>
+                                                    @endif
+                                                @endcan
+                                                @can('manage-routes')
                                                 <details>
                                                     <summary class="btn-secondary min-h-9 cursor-pointer list-none px-3 py-1.5">Configurar</summary>
                                                     <div class="mt-2 w-[22rem] rounded-2xl border border-stone-200 bg-white p-4 text-left shadow-lg">
@@ -52,6 +60,7 @@
                                                     </div>
                                                 </details>
                                                 <form method="POST" action="{{ route('routes.stops.destroy', [$salesRoute, $stop]) }}" data-confirm="¿Retirar esta visita de la ruta?">@csrf @method('DELETE')<button class="btn-danger" type="submit">Retirar</button></form>
+                                                @endcan
                                             </div>
                                         </td>
                                     </tr>
@@ -62,6 +71,7 @@
                 @endif
             </section>
 
+            @can('manage-routes')
             <aside class="space-y-5">
                 <section class="card p-5">
                     <p class="text-sm font-semibold text-leaf-700">Agregar visita</p>
@@ -87,6 +97,7 @@
                     <form class="mt-4" method="POST" action="{{ route('routes.destroy', $salesRoute) }}" data-confirm="¿Eliminar esta ruta? Esta acción no se puede deshacer.">@csrf @method('DELETE')<button class="btn-danger w-full" type="submit">Eliminar ruta</button></form>
                 </section>
             </aside>
+            @endcan
         </div>
     </div>
 @endsection

@@ -2,10 +2,12 @@
 
 @section('title', 'Resumen')
 @section('page-title', 'Resumen de la operación')
-@section('page-subtitle', 'Clientes, rutas y catálogo preparados para avanzar.')
+@section('page-subtitle', 'Clientes, rutas, preventa y catálogo en una sola operación.')
 
 @section('header-actions')
-    @can('manage-customers')
+    @can('manage-orders')
+        <a href="{{ route('orders.create') }}" class="btn-primary">＋ <span class="hidden sm:inline">Nuevo pedido</span></a>
+    @elsecan('manage-customers')
         <a href="{{ route('customers.create') }}" class="btn-primary">＋ <span class="hidden sm:inline">Nuevo cliente</span></a>
     @elsecan('manage-catalog')
         <a href="{{ route('products.create') }}" class="btn-primary">＋ <span class="hidden sm:inline">Nuevo producto</span></a>
@@ -21,8 +23,12 @@
                 $cards[] = ['label' => 'Clientes', 'value' => $metrics['customers'], 'hint' => $metrics['active_customers'].' activos', 'accent' => 'bg-leaf-700'];
             }
 
-            if (auth()->user()->canManageRoutes()) {
+            if (auth()->user()->canViewRoutes()) {
                 $cards[] = ['label' => 'Rutas', 'value' => $metrics['routes'], 'hint' => $metrics['active_routes'].' activas', 'accent' => 'bg-amber-500'];
+            }
+
+            if (auth()->user()->canViewOrders()) {
+                $cards[] = ['label' => 'Pedidos', 'value' => $metrics['orders'], 'hint' => $metrics['draft_orders'].' borradores · '.$metrics['confirmed_orders'].' confirmados', 'accent' => 'bg-emerald-600'];
             }
 
             if (auth()->user()->canManageCatalog()) {
@@ -40,6 +46,24 @@
             </article>
         @endforeach
     </section>
+
+    @can('view-orders')
+        <section class="mt-7 card overflow-hidden">
+            <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                <div><h2 class="font-bold text-ink-950">Pedidos recientes</h2><p class="text-sm text-ink-600">Actividad visible según tu rol y rutas asignadas</p></div>
+                <a href="{{ route('orders.index') }}" class="text-sm font-semibold text-leaf-700 hover:underline">Ver todos</a>
+            </div>
+            @if ($recentOrders->isEmpty())
+                <div class="p-6"><x-empty-state title="Aún no hay pedidos" description="Crea el primer borrador desde una visita de ruta." /></div>
+            @else
+                <div class="grid divide-y divide-stone-100 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-3">
+                    @foreach ($recentOrders as $order)
+                        <a href="{{ route('orders.show', $order) }}" class="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-mint-50/60"><div class="min-w-0"><p class="truncate font-semibold text-ink-950">{{ $order->order_number }} · {{ $order->customer_name }}</p><p class="truncate text-sm text-ink-600">{{ $order->status->label() }} · {{ $order->salesperson_name }}</p></div><p class="shrink-0 font-black text-ink-950">{{ $order->currency }} {{ number_format((float) $order->total, 2) }}</p></a>
+                    @endforeach
+                </div>
+            @endif
+        </section>
+    @endcan
 
     <section class="mt-7 grid gap-6 {{ auth()->user()->canManageCustomers() && auth()->user()->canManageCatalog() ? 'xl:grid-cols-2' : '' }}">
         @can('manage-customers')

@@ -14,9 +14,9 @@ class SalesRouteManagementTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
-    public function test_preventista_can_create_route_with_valid_personnel(): void
+    public function test_supervisor_can_create_route_with_valid_personnel(): void
     {
-        $user = User::factory()->preventista()->create();
+        $user = User::factory()->supervisor()->create();
         $salesperson = User::factory()->preventista()->create();
         $driver = User::factory()->repartidor()->create();
 
@@ -65,7 +65,7 @@ class SalesRouteManagementTest extends TestCase
 
     public function test_customer_can_have_visits_in_multiple_routes_and_days(): void
     {
-        $user = User::factory()->preventista()->create();
+        $user = User::factory()->supervisor()->create();
         $customer = Customer::factory()->create();
         $northRoute = SalesRoute::factory()->create();
         $southRoute = SalesRoute::factory()->create();
@@ -116,7 +116,7 @@ class SalesRouteManagementTest extends TestCase
 
     public function test_scoped_binding_returns_404_for_stop_from_another_route(): void
     {
-        $user = User::factory()->preventista()->create();
+        $user = User::factory()->supervisor()->create();
         $firstRoute = SalesRoute::factory()->create();
         $secondRoute = SalesRoute::factory()->create();
         $stop = RouteStop::factory()->for($secondRoute)->create([
@@ -140,7 +140,7 @@ class SalesRouteManagementTest extends TestCase
 
     public function test_existing_visit_can_be_reordered_after_customer_is_deactivated(): void
     {
-        $user = User::factory()->preventista()->create();
+        $user = User::factory()->supervisor()->create();
         $salesRoute = SalesRoute::factory()->create();
         $customer = Customer::factory()->inactive()->create();
         $stop = RouteStop::factory()->for($salesRoute)->for($customer)->create([
@@ -164,7 +164,7 @@ class SalesRouteManagementTest extends TestCase
 
     public function test_route_page_renders_visits_and_keeps_configuration_panel_in_document_flow(): void
     {
-        $user = User::factory()->preventista()->create();
+        $user = User::factory()->supervisor()->create();
         $salesRoute = SalesRoute::factory()->create();
         $customer = Customer::factory()->create([
             'business_name' => "Negocio <script>alert('xss')</script>",
@@ -186,5 +186,34 @@ class SalesRouteManagementTest extends TestCase
         $user = User::factory()->create();
 
         $this->actingAs($user)->get(route('routes.index'))->assertForbidden();
+    }
+
+    public function test_preventista_only_sees_assigned_routes_and_cannot_configure_them(): void
+    {
+        $user = User::factory()->preventista()->create();
+        $assignedRoute = SalesRoute::factory()->for($user, 'salesperson')->create(['name' => 'Ruta asignada']);
+        $otherRoute = SalesRoute::factory()->create(['name' => 'Ruta privada']);
+        $customer = Customer::factory()->create();
+        RouteStop::factory()->for($assignedRoute)->for($customer)->create(['visit_day' => Weekday::Monday]);
+        RouteStop::factory()->for($otherRoute)->for($customer)->create(['visit_day' => Weekday::Tuesday]);
+
+        $this->actingAs($user)
+            ->get(route('routes.index'))
+            ->assertOk()
+            ->assertSee('Ruta asignada')
+            ->assertDontSee('Ruta privada')
+            ->assertDontSee('Nueva ruta');
+        $this->actingAs($user)
+            ->get(route('routes.show', $assignedRoute))
+            ->assertOk()
+            ->assertDontSee('Editar ruta')
+            ->assertDontSee('Agregar visita');
+        $this->actingAs($user)->get(route('routes.show', $otherRoute))->assertForbidden();
+        $this->actingAs($user)->get(route('routes.create'))->assertForbidden();
+        $this->actingAs($user)
+            ->get(route('customers.show', $customer))
+            ->assertOk()
+            ->assertSee('Ruta asignada')
+            ->assertDontSee('Ruta privada');
     }
 }
