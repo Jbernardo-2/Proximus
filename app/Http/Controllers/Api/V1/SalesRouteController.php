@@ -7,19 +7,26 @@ use App\Http\Requests\StoreSalesRouteRequest;
 use App\Http\Requests\UpdateSalesRouteRequest;
 use App\Http\Resources\Api\V1\SalesRouteResource;
 use App\Models\SalesRoute;
+use App\Models\User;
+use App\UserRole;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 
 class SalesRouteController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
+        Gate::authorize('viewAny', SalesRoute::class);
+        /** @var User $user */
+        $user = $request->user();
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->toString();
         $salespersonId = $request->integer('salesperson_id');
         $driverId = $request->integer('driver_id');
         $salesRoutes = SalesRoute::query()
+            ->when($user->role === UserRole::Preventista, fn ($query) => $query->where('salesperson_id', $user->id))
             ->with(['salesperson', 'driver'])
             ->withCount('stops')
             ->when($search !== '', function ($query) use ($search): void {
@@ -28,7 +35,10 @@ class SalesRouteController extends Controller
                         ->orWhere('code', 'like', "%{$search}%");
                 });
             })
-            ->when($salespersonId > 0, fn ($query) => $query->where('salesperson_id', $salespersonId))
+            ->when(
+                $salespersonId > 0 && $user->role !== UserRole::Preventista,
+                fn ($query) => $query->where('salesperson_id', $salespersonId),
+            )
             ->when($driverId > 0, fn ($query) => $query->where('driver_id', $driverId))
             ->when(in_array($status, ['active', 'inactive'], true), fn ($query) => $query->where('is_active', $status === 'active'))
             ->orderByDesc('is_active')
@@ -50,6 +60,8 @@ class SalesRouteController extends Controller
 
     public function show(SalesRoute $salesRoute): SalesRouteResource
     {
+        Gate::authorize('view', $salesRoute);
+
         return new SalesRouteResource($salesRoute->load([
             'salesperson',
             'driver',
@@ -63,6 +75,7 @@ class SalesRouteController extends Controller
 
     public function update(UpdateSalesRouteRequest $request, SalesRoute $salesRoute): SalesRouteResource
     {
+        Gate::authorize('update', $salesRoute);
         $salesRoute->update($request->validated());
 
         return new SalesRouteResource($salesRoute->refresh()->load(['salesperson', 'driver'])->loadCount('stops'));
@@ -70,6 +83,8 @@ class SalesRouteController extends Controller
 
     public function destroy(SalesRoute $salesRoute): JsonResponse
     {
+        Gate::authorize('delete', $salesRoute);
+
         if ($salesRoute->stops()->exists()) {
             return response()->json([
                 'message' => 'No se puede eliminar una ruta con visitas programadas.',

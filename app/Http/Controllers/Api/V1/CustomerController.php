@@ -7,6 +7,7 @@ use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Http\Resources\Api\V1\CustomerResource;
 use App\Models\Customer;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -15,11 +16,13 @@ class CustomerController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
+        /** @var User $user */
+        $user = $request->user();
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->toString();
         $businessType = $request->string('business_type')->trim()->toString();
         $customers = Customer::query()
-            ->withCount('routeStops')
+            ->withCount(['routeStops' => fn ($query) => $query->visibleTo($user)])
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder->where('business_name', 'like', "%{$search}%")
@@ -48,22 +51,28 @@ class CustomerController extends Controller
             ->setStatusCode(201);
     }
 
-    public function show(Customer $customer): CustomerResource
+    public function show(Request $request, Customer $customer): CustomerResource
     {
+        /** @var User $user */
+        $user = $request->user();
+
         return new CustomerResource($customer->load([
             'routeStops' => fn ($query) => $query
                 ->with('salesRoute')
+                ->visibleTo($user)
                 ->orderBy('visit_day')
                 ->orderBy('visit_order')
                 ->orderBy('id'),
-        ])->loadCount('routeStops'));
+        ])->loadCount(['routeStops' => fn ($query) => $query->visibleTo($user)]));
     }
 
     public function update(UpdateCustomerRequest $request, Customer $customer): CustomerResource
     {
         $customer->update($request->validated());
 
-        return new CustomerResource($customer->refresh()->loadCount('routeStops'));
+        return new CustomerResource($customer->refresh()->loadCount([
+            'routeStops' => fn ($query) => $query->visibleTo($request->user()),
+        ]));
     }
 
     public function destroy(Customer $customer): JsonResponse

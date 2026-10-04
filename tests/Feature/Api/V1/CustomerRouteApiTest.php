@@ -69,7 +69,7 @@ class CustomerRouteApiTest extends TestCase
 
     public function test_api_allows_customer_in_multiple_routes_and_returns_schedule(): void
     {
-        Sanctum::actingAs(User::factory()->preventista()->create(), ['routes:manage']);
+        Sanctum::actingAs(User::factory()->supervisor()->create(), ['routes:view', 'routes:manage']);
         $customer = Customer::factory()->create();
         $firstRoute = SalesRoute::factory()->create();
         $secondRoute = SalesRoute::factory()->create();
@@ -112,7 +112,7 @@ class CustomerRouteApiTest extends TestCase
 
     public function test_duplicate_customer_day_in_same_route_returns_422(): void
     {
-        Sanctum::actingAs(User::factory()->preventista()->create(), ['routes:manage']);
+        Sanctum::actingAs(User::factory()->supervisor()->create(), ['routes:manage']);
         $salesRoute = SalesRoute::factory()->create();
         $stop = RouteStop::factory()->for($salesRoute)->create([
             'visit_day' => Weekday::Monday,
@@ -154,7 +154,7 @@ class CustomerRouteApiTest extends TestCase
 
     public function test_scoped_binding_returns_404_for_stop_from_another_route(): void
     {
-        Sanctum::actingAs(User::factory()->preventista()->create(), ['routes:manage']);
+        Sanctum::actingAs(User::factory()->supervisor()->create(), ['routes:manage']);
         $firstRoute = SalesRoute::factory()->create();
         $secondRoute = SalesRoute::factory()->create();
         $stop = RouteStop::factory()->for($secondRoute)->create([
@@ -172,5 +172,30 @@ class CustomerRouteApiTest extends TestCase
 
         $this->assertSame(Weekday::Tuesday, $stop->refresh()->visit_day);
         $this->assertSame(3, $stop->visit_order);
+    }
+
+    public function test_preventista_with_view_ability_only_receives_assigned_routes(): void
+    {
+        $user = User::factory()->preventista()->create();
+        $assignedRoute = SalesRoute::factory()->for($user, 'salesperson')->create(['name' => 'Ruta API asignada']);
+        $otherRoute = SalesRoute::factory()->create(['name' => 'Ruta API ajena']);
+        $customer = Customer::factory()->create();
+        RouteStop::factory()->for($assignedRoute)->for($customer)->create(['visit_day' => Weekday::Monday]);
+        RouteStop::factory()->for($otherRoute)->for($customer)->create(['visit_day' => Weekday::Tuesday]);
+        Sanctum::actingAs($user, ['routes:view']);
+
+        $this->getJson('/api/v1/routes')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $assignedRoute->id);
+        $this->getJson("/api/v1/routes/{$otherRoute->id}")->assertForbidden();
+        $this->postJson('/api/v1/routes', [])->assertForbidden();
+
+        Sanctum::actingAs($user, ['customers:manage']);
+        $this->getJson("/api/v1/customers/{$customer->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.route_stops')
+            ->assertJsonPath('data.route_stops_count', 1)
+            ->assertJsonPath('data.route_stops.0.sales_route.id', $assignedRoute->id);
     }
 }

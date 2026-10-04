@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Customer;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -13,13 +14,15 @@ class CustomerController extends Controller
 {
     public function index(Request $request): View
     {
+        /** @var User $user */
+        $user = $request->user();
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->toString();
         $businessType = $request->string('business_type')->trim()->toString();
 
         return view('operations.customers.index', [
             'customers' => Customer::query()
-                ->withCount('routeStops')
+                ->withCount(['routeStops' => fn ($query) => $query->visibleTo($user)])
                 ->when($search !== '', function ($query) use ($search): void {
                     $query->where(function ($builder) use ($search): void {
                         $builder->where('business_name', 'like', "%{$search}%")
@@ -60,11 +63,14 @@ class CustomerController extends Controller
         return redirect()->route('customers.show', $customer)->with('success', 'Cliente creado correctamente.');
     }
 
-    public function show(Customer $customer): View
+    public function show(Request $request, Customer $customer): View
     {
+        /** @var User $user */
+        $user = $request->user();
         $customer->load([
             'routeStops' => fn ($query) => $query
                 ->with('salesRoute')
+                ->visibleTo($user)
                 ->orderBy('visit_day')
                 ->orderBy('visit_order')
                 ->orderBy('id'),

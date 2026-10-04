@@ -34,6 +34,11 @@ class SalesRoute extends Model
         return $this->hasMany(RouteStop::class);
     }
 
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
     public function customers(): BelongsToMany
     {
         return $this->belongsToMany(Customer::class, 'route_stops')

@@ -38,7 +38,32 @@ enum UserRole: string
 
     public function canManageRoutes(): bool
     {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
+    public function canViewRoutes(): bool
+    {
         return in_array($this, [self::Admin, self::Supervisor, self::Preventista], true);
+    }
+
+    public function canViewOrders(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor, self::Preventista, self::Bodeguero], true);
+    }
+
+    public function canManageOrders(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor, self::Preventista], true);
+    }
+
+    public function canOverrideOrderPrices(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
+    public function canManageOrderLifecycle(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
     }
 
     public function canManageUsers(): bool
@@ -61,8 +86,28 @@ enum UserRole: string
             $abilities[] = 'customers:manage';
         }
 
+        if ($this->canViewRoutes()) {
+            $abilities[] = 'routes:view';
+        }
+
         if ($this->canManageRoutes()) {
             $abilities[] = 'routes:manage';
+        }
+
+        if ($this->canViewOrders()) {
+            $abilities[] = 'orders:view';
+        }
+
+        if ($this->canManageOrders()) {
+            $abilities[] = 'orders:manage';
+        }
+
+        if ($this->canOverrideOrderPrices()) {
+            $abilities[] = 'orders:override';
+        }
+
+        if ($this->canManageOrderLifecycle()) {
+            $abilities[] = 'orders:lifecycle';
         }
 
         if ($this->canManageUsers()) {

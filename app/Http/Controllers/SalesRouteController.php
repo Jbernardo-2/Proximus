@@ -12,17 +12,22 @@ use App\Weekday;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 class SalesRouteController extends Controller
 {
     public function index(Request $request): View
     {
+        Gate::authorize('viewAny', SalesRoute::class);
+        /** @var User $user */
+        $user = $request->user();
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->toString();
 
         return view('operations.routes.index', [
             'salesRoutes' => SalesRoute::query()
+                ->when($user->role === UserRole::Preventista, fn ($query) => $query->where('salesperson_id', $user->id))
                 ->with(['salesperson', 'driver'])
                 ->withCount('stops')
                 ->when($search !== '', function ($query) use ($search): void {
@@ -46,6 +51,8 @@ class SalesRouteController extends Controller
 
     public function create(): View
     {
+        Gate::authorize('create', SalesRoute::class);
+
         return view('operations.routes.form', [
             'salesRoute' => new SalesRoute,
             'salespeople' => $this->personnel(UserRole::Preventista),
@@ -62,6 +69,7 @@ class SalesRouteController extends Controller
 
     public function show(SalesRoute $salesRoute): View
     {
+        Gate::authorize('view', $salesRoute);
         $salesRoute->load([
             'salesperson',
             'driver',
@@ -90,6 +98,8 @@ class SalesRouteController extends Controller
 
     public function edit(SalesRoute $salesRoute): View
     {
+        Gate::authorize('update', $salesRoute);
+
         return view('operations.routes.form', [
             'salesRoute' => $salesRoute,
             'salespeople' => $this->personnel(UserRole::Preventista, $salesRoute->salesperson_id),
@@ -99,6 +109,7 @@ class SalesRouteController extends Controller
 
     public function update(UpdateSalesRouteRequest $request, SalesRoute $salesRoute): RedirectResponse
     {
+        Gate::authorize('update', $salesRoute);
         $salesRoute->update($request->validated());
 
         return redirect()->route('routes.show', $salesRoute)->with('success', 'Ruta actualizada correctamente.');
@@ -106,6 +117,8 @@ class SalesRouteController extends Controller
 
     public function destroy(SalesRoute $salesRoute): RedirectResponse
     {
+        Gate::authorize('delete', $salesRoute);
+
         if ($salesRoute->stops()->exists()) {
             return back()->with('error', 'No se puede eliminar una ruta con visitas programadas. Puedes desactivarla o retirar primero sus visitas.');
         }

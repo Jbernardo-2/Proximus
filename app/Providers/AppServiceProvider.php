@@ -2,7 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\Order;
+use App\Models\SalesRoute;
 use App\Models\User;
+use App\Policies\OrderPolicy;
+use App\Policies\SalesRoutePolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -32,8 +36,13 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('access-panel', fn (User $user): bool => $user->canAccessPanel());
         Gate::define('manage-catalog', fn (User $user): bool => $user->canManageCatalog());
         Gate::define('manage-customers', fn (User $user): bool => $user->canManageCustomers());
+        Gate::define('view-routes', fn (User $user): bool => $user->canViewRoutes());
         Gate::define('manage-routes', fn (User $user): bool => $user->canManageRoutes());
+        Gate::define('view-orders', fn (User $user): bool => $user->canViewOrders());
+        Gate::define('manage-orders', fn (User $user): bool => $user->canManageOrders());
         Gate::define('manage-users', fn (User $user): bool => $user->canManageUsers());
+        Gate::policy(SalesRoute::class, SalesRoutePolicy::class);
+        Gate::policy(Order::class, OrderPolicy::class);
 
         Password::defaults(fn (): Password => Password::min(12)
             ->max(128)

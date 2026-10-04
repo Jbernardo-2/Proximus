@@ -54,6 +54,31 @@ class User extends Authenticatable
         return $this->is_active && $this->role->canManageRoutes();
     }
 
+    public function canViewRoutes(): bool
+    {
+        return $this->is_active && $this->role->canViewRoutes();
+    }
+
+    public function canViewOrders(): bool
+    {
+        return $this->is_active && $this->role->canViewOrders();
+    }
+
+    public function canManageOrders(): bool
+    {
+        return $this->is_active && $this->role->canManageOrders();
+    }
+
+    public function canOverrideOrderPrices(): bool
+    {
+        return $this->is_active && $this->role->canOverrideOrderPrices();
+    }
+
+    public function canManageOrderLifecycle(): bool
+    {
+        return $this->is_active && $this->role->canManageOrderLifecycle();
+    }
+
     /**
      * @return list<string>
      */
