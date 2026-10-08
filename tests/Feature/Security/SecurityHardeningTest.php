@@ -19,7 +19,7 @@ class SecurityHardeningTest extends TestCase
             ->assertHeader('Cache-Control', 'no-store, private')
             ->assertHeader('Cross-Origin-Opener-Policy', 'same-origin')
             ->assertHeader('Cross-Origin-Resource-Policy', 'same-origin')
-            ->assertHeader('Permissions-Policy', 'camera=(self), geolocation=(), microphone=()')
+            ->assertHeader('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=()')
             ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'DENY')
@@ -32,6 +32,7 @@ class SecurityHardeningTest extends TestCase
         $this->assertStringContainsString("frame-ancestors 'none'", $policy);
         $this->assertStringContainsString("object-src 'none'", $policy);
         $this->assertStringContainsString("script-src 'self' 'wasm-unsafe-eval'", $policy);
+        $this->assertStringContainsString('https://tile.openstreetmap.org', $policy);
         $this->assertStringContainsString("worker-src 'self' blob:", $policy);
     }
 

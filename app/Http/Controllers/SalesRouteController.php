@@ -82,15 +82,7 @@ class SalesRouteController extends Controller
 
         return view('operations.routes.show', [
             'salesRoute' => $salesRoute,
-            'customers' => Customer::query()
-                ->where(function ($query) use ($salesRoute): void {
-                    $query->where('is_active', true)
-                        ->orWhereKey($salesRoute->stops->pluck('customer_id'));
-                })
-                ->orderByDesc('is_active')
-                ->orderBy('business_name')
-                ->orderBy('id')
-                ->get(),
+            'hasActiveCustomers' => Customer::query()->active()->exists(),
             'weekdays' => Weekday::options(),
             'nextVisitOrder' => min(((int) $salesRoute->stops->max('visit_order')) + 1, 65535),
         ]);

@@ -81,6 +81,7 @@ class DeliveryRunController extends Controller
                     'payments.receivedBy',
                     'payments.voidedBy',
                     'completedBy',
+                    'preparedBy',
                 ])
                 ->orderBy('visit_order')
                 ->orderBy('id'),

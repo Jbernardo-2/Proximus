@@ -11,6 +11,9 @@ use App\Http\Requests\UpdateDeliveryRunRequest;
 use App\Models\DeliveryRun;
 use App\Models\InventoryStock;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\SalesRoute;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Warehouse;
@@ -34,7 +37,55 @@ class DeliveryRunController extends Controller
         $status = $request->string('status')->toString();
         $dateFrom = $request->string('date_from')->toString();
         $dateTo = $request->string('date_to')->toString();
+        $warehouses = Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->get();
+        $warehouseId = $request->string('warehouse_id')->toString();
+        $warehouseId = $warehouses->contains('id', $warehouseId)
+            ? $warehouseId
+            : (string) ($warehouses->firstWhere('is_default', true)?->id ?? $warehouses->first()?->id ?? '');
+        $routeId = $request->string('sales_route_id')->toString();
+        $planningDate = $request->string('planning_date')->toString();
         $baseQuery = DeliveryRun::query()->visibleTo($user);
+        $pendingOrderBase = Order::query()
+            ->where('status', OrderStatus::Confirmed)
+            ->when($warehouseId !== '', fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->when($routeId !== '', fn ($query) => $query->where('sales_route_id', $routeId))
+            ->when($this->isDate($planningDate), fn ($query) => $query->whereDate('requested_delivery_date', $planningDate));
+        $pendingOrders = (clone $pendingOrderBase)
+            ->with(['customer', 'salesRoute'])
+            ->withCount('items')
+            ->orderByRaw('requested_delivery_date is null')
+            ->orderBy('requested_delivery_date')
+            ->orderBy('route_visit_order')
+            ->orderBy('order_number')
+            ->paginate(10, ['*'], 'orders_page')
+            ->withQueryString();
+        $consolidated = OrderItem::query()
+            ->whereIn('order_id', (clone $pendingOrderBase)->select('orders.id'))
+            ->selectRaw('product_id, min(product_name) as product_name, min(product_sku) as product_sku, min(base_unit_symbol) as base_unit_symbol, sum(base_quantity) as total_base_quantity, count(distinct order_id) as orders_count, count(*) as lines_count')
+            ->groupBy('product_id')
+            ->orderBy('product_name')
+            ->paginate(20, ['*'], 'consolidated_page')
+            ->withQueryString();
+        $consolidatedProductIds = $consolidated->getCollection()->pluck('product_id');
+        $presentationTotals = OrderItem::query()
+            ->whereIn('order_id', (clone $pendingOrderBase)->select('orders.id'))
+            ->whereIn('product_id', $consolidatedProductIds)
+            ->selectRaw('product_id, product_presentation_id, min(presentation_name) as presentation_name, sum(quantity) as total_quantity, sum(base_quantity) as total_base_quantity')
+            ->groupBy('product_id', 'product_presentation_id')
+            ->orderByDesc('total_base_quantity')
+            ->get()
+            ->groupBy('product_id');
+        $consolidatedProducts = Product::query()
+            ->withTrashed()
+            ->with(['category:id,name', 'brand:id,name'])
+            ->whereIn('id', $consolidatedProductIds)
+            ->get()
+            ->keyBy('id');
+        $planningStocks = $warehouseId === '' ? collect() : InventoryStock::query()
+            ->where('warehouse_id', $warehouseId)
+            ->whereIn('product_id', $consolidatedProductIds)
+            ->get()
+            ->keyBy('product_id');
 
         return view('deliveries.index', [
             'deliveryRuns' => (clone $baseQuery)
@@ -54,10 +105,14 @@ class DeliveryRunController extends Controller
                 ->orderByDesc('scheduled_date')
                 ->orderByDesc('created_at')
                 ->orderByDesc('id')
-                ->paginate(20)
+                ->paginate(20, ['*'], 'runs_page')
                 ->withQueryString(),
             'metrics' => [
                 'today' => (clone $baseQuery)->whereDate('scheduled_date', today())->count(),
+                'pending_orders' => (clone $pendingOrderBase)->count(),
+                'pending_total' => (string) (clone $pendingOrderBase)->sum('total'),
+                'preparing' => (clone $baseQuery)->where('status', DeliveryRunStatus::Preparing)->count(),
+                'loaded' => (clone $baseQuery)->where('status', DeliveryRunStatus::Loaded)->count(),
                 'in_transit' => (clone $baseQuery)->where('status', DeliveryRunStatus::InTransit)->count(),
                 'awaiting_settlement' => (clone $baseQuery)->where('status', DeliveryRunStatus::AwaitingSettlement)->count(),
                 'open' => (clone $baseQuery)->whereIn('status', collect(DeliveryRunStatus::cases())
@@ -69,6 +124,16 @@ class DeliveryRunController extends Controller
             'selectedStatus' => $status,
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
+            'pendingOrders' => $pendingOrders,
+            'consolidated' => $consolidated,
+            'presentationTotals' => $presentationTotals,
+            'consolidatedProducts' => $consolidatedProducts,
+            'planningStocks' => $planningStocks,
+            'warehouses' => $warehouses,
+            'salesRoutes' => SalesRoute::query()->active()->orderBy('name')->get(['id', 'code', 'name']),
+            'selectedWarehouseId' => $warehouseId,
+            'selectedRouteId' => $routeId,
+            'planningDate' => $planningDate,
         ]);
     }
 
@@ -118,6 +183,7 @@ class DeliveryRunController extends Controller
                     'payments.receivedBy',
                     'payments.voidedBy',
                     'completedBy',
+                    'preparedBy',
                 ])
                 ->orderBy('visit_order')
                 ->orderBy('id'),

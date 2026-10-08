@@ -2,18 +2,20 @@
 
 namespace App\Actions;
 
+use App\DeliveryOrderStatus;
 use App\DeliveryRunStatus;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunItem;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class SaveDeliveryPreparationAction
 {
     /** @param list<array{id: string, prepared_quantity: mixed}> $items */
-    public function handle(DeliveryRun $deliveryRun, array $items): DeliveryRun
+    public function handle(DeliveryRun $deliveryRun, array $items, ?User $actor = null): DeliveryRun
     {
-        return DB::transaction(function () use ($deliveryRun, $items): DeliveryRun {
+        return DB::transaction(function () use ($deliveryRun, $items, $actor): DeliveryRun {
             $run = DeliveryRun::query()->lockForUpdate()->findOrFail($deliveryRun->id);
 
             if ($run->status !== DeliveryRunStatus::Preparing) {
@@ -58,6 +60,12 @@ class SaveDeliveryPreparationAction
                     'prepared_base_quantity' => bcmul($quantity, (string) $item->conversion_factor, 6),
                 ])->save();
             }
+
+            $run->runOrders()->update([
+                'status' => DeliveryOrderStatus::Prepared->value,
+                'prepared_at' => now(),
+                'prepared_by' => $actor?->id,
+            ]);
 
             return $run->refresh();
         });

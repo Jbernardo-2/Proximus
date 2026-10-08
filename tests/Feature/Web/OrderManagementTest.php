@@ -33,16 +33,24 @@ class OrderManagementTest extends TestCase
         $this->actingAs($user)
             ->get(route('orders.create'))
             ->assertOk()
-            ->assertSee($customer->business_name)
-            ->assertSee($salesRoute->name)
+            ->assertSee('data-picker-endpoint="'.route('lookups.customers').'"', false)
+            ->assertSee('Asignado automáticamente desde tu sesión')
+            ->assertDontSee($customer->business_name)
+            ->assertDontSee($salesRoute->name)
             ->assertDontSee('Cliente fuera de la ruta')
             ->assertDontSee('Ruta no asignada');
+
+        $this->actingAs($user)
+            ->get(route('orders.create', ['route_stop_id' => $stop->id]))
+            ->assertOk()
+            ->assertSee($customer->business_name)
+            ->assertSee($salesRoute->name);
 
         $response = $this->actingAs($user)->post(route('orders.store'), [
             'client_reference' => 'device-001',
             'customer_id' => $customer->id,
             'route_stop_id' => $stop->id,
-            'salesperson_id' => $user->id,
+            'salesperson_id' => User::factory()->preventista()->create()->id,
             'order_date' => now()->toDateString(),
             'requested_delivery_date' => now()->addDay()->toDateString(),
             'payment_term' => PaymentTerm::Credit->value,

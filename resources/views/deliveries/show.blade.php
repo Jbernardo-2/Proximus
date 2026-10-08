@@ -20,6 +20,9 @@
             \App\DeliveryRunStatus::Settled,
         ];
         $currentStep = array_search($deliveryRun->status, $statusSteps, true);
+        $preparedOrdersCount = $deliveryRun->runOrders->where('status', \App\DeliveryOrderStatus::Prepared)->count();
+        $pendingPreparationCount = $deliveryRun->runOrders->count() - $preparedOrdersCount;
+        $allOrdersPrepared = $deliveryRun->runOrders->isNotEmpty() && $pendingPreparationCount === 0;
     @endphp
 
     <div class="space-y-6">
@@ -91,21 +94,30 @@
                 @endif
 
                 @if($canPrepare)
-                    <section class="card p-5 sm:p-7">
-                        <div class="mb-5"><p class="text-xs font-semibold tracking-[0.14em] text-leaf-700 uppercase">Bodega</p><h2 class="mt-1 text-lg font-black text-ink-950">Cantidades preparadas</h2><p class="text-sm text-ink-600">Puedes preparar menos de lo solicitado cuando exista un faltante. La diferencia se liberará al confirmar la carga.</p></div>
-                        <form method="POST" action="{{ route('delivery-runs.preparation.update', $deliveryRun) }}" class="space-y-5">
-                            @csrf @method('PUT')
+                    <section class="card overflow-hidden" id="preparation-queue">
+                        <header class="border-b border-stone-100 p-5 sm:p-7">
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div><p class="text-xs font-semibold tracking-[0.14em] text-leaf-700 uppercase">Bodega · cola de preparación</p><h2 class="mt-1 text-xl font-black text-ink-950">Guarda un pedido a la vez</h2><p class="mt-1 text-sm text-ink-600">Cada pedido conserva su avance. El inventario se descuenta una sola vez al confirmar la carga completa.</p></div>
+                                <div class="rounded-2xl {{ $allOrdersPrepared ? 'bg-emerald-100 text-emerald-950' : 'bg-amber-100 text-amber-950' }} px-5 py-3 text-center"><p class="text-2xl font-black">{{ $preparedOrdersCount }}/{{ $deliveryRun->runOrders->count() }}</p><p class="text-xs font-bold uppercase">pedidos listos</p></div>
+                            </div>
+                            <progress class="mt-4 h-2 w-full overflow-hidden rounded-full accent-leaf-600" value="{{ $preparedOrdersCount }}" max="{{ max($deliveryRun->runOrders->count(), 1) }}">{{ $preparedOrdersCount }} de {{ $deliveryRun->runOrders->count() }}</progress>
+                        </header>
+                        <div class="divide-y divide-stone-100">
                             @foreach($deliveryRun->runOrders as $runOrder)
-                                <fieldset class="overflow-hidden rounded-2xl border border-stone-200"><legend class="sr-only">{{ $runOrder->order->order_number }}</legend><div class="flex flex-wrap items-center justify-between gap-3 bg-stone-50 px-4 py-3"><div><p class="font-bold text-ink-950">#{{ $runOrder->visit_order }} · {{ $runOrder->order->customer_name }}</p><p class="text-xs text-ink-600">{{ $runOrder->order->order_number }}</p></div><span class="text-xs font-semibold text-ink-600">{{ $runOrder->items->count() }} líneas</span></div><div class="divide-y divide-stone-100">
-                                    @foreach($runOrder->items as $item)
-                                        <div class="grid items-end gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_9rem_9rem]"><div><p class="font-semibold text-ink-950">{{ $item->product_name }}</p><p class="text-xs text-ink-600">Solicitado: {{ $quantity($item->requested_quantity) }} {{ $item->presentation_name }} · {{ $quantity($item->requested_base_quantity) }} {{ $item->base_unit_symbol }}</p></div><div><label class="form-label" for="prepared-{{ $item->id }}">Preparado</label><input type="hidden" name="items[{{ $item->id }}][id]" value="{{ $item->id }}"><input class="form-input" id="prepared-{{ $item->id }}" name="items[{{ $item->id }}][prepared_quantity]" type="number" min="0" max="{{ $item->requested_quantity }}" step="0.000001" required value="{{ old("items.{$item->id}.prepared_quantity", $item->prepared_quantity) }}"></div><div class="rounded-xl bg-stone-50 px-3 py-2 text-right"><p class="text-xs text-ink-600">Equivale a</p><p class="font-bold text-ink-950">× {{ $quantity($item->conversion_factor) }} {{ $item->base_unit_symbol }}</p></div></div>
-                                    @endforeach
-                                </div></fieldset>
+                                @php($prepared = $runOrder->status === \App\DeliveryOrderStatus::Prepared)
+                                <article class="grid items-center gap-4 p-5 lg:grid-cols-[5rem_minmax(0,1fr)_auto] {{ $prepared ? 'bg-emerald-50/50' : '' }}">
+                                    <div class="grid size-14 place-items-center rounded-2xl {{ $prepared ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-950' }} text-xl font-black">#{{ $runOrder->visit_order }}</div>
+                                    <div><div class="flex flex-wrap items-center gap-2"><h3 class="font-black text-ink-950">{{ $runOrder->order->customer_name }}</h3><x-delivery-order-status-badge :status="$runOrder->status" /></div><p class="text-sm text-ink-600">{{ $runOrder->order->order_number }} · {{ $runOrder->items->count() }} líneas · {{ $currency }} {{ number_format((float) $runOrder->requested_total, 2) }}</p>@if($prepared)<p class="mt-1 text-xs font-semibold text-emerald-700">Guardado {{ $runOrder->prepared_at?->format('d/m/Y H:i') }} por {{ $runOrder->preparedBy?->name ?: 'el equipo de bodega' }}</p>@else<p class="mt-1 text-xs font-semibold text-amber-700">Pendiente de registrar cantidades</p>@endif</div>
+                                    <a class="{{ $prepared ? 'btn-secondary' : 'btn-primary' }}" href="{{ route('delivery-runs.orders.preparation.edit', [$deliveryRun, $runOrder]) }}">{{ $prepared ? 'Revisar preparación' : 'Preparar pedido' }}</a>
+                                </article>
                             @endforeach
-                            <div class="flex flex-wrap justify-end gap-3"><button class="btn-secondary" type="submit">Guardar preparación</button></div>
-                        </form>
+                        </div>
                         @if($canLoad)
-                            <div class="mt-6 rounded-2xl border border-indigo-200 bg-indigo-50 p-5"><h3 class="font-bold text-indigo-950">Confirmar salida física de bodega</h3><p class="mt-1 text-sm leading-6 text-indigo-900">Se descontará únicamente lo preparado, se consumirá la reserva y la mercancía quedará controlada como carga en tránsito.</p><form class="mt-4" method="POST" action="{{ route('delivery-runs.load', $deliveryRun) }}" data-confirm="¿Confirmar la carga? Las cantidades dejarán de ser editables.">@csrf<button class="btn-primary" type="submit">Confirmar carga</button></form></div>
+                            @if($allOrdersPrepared)
+                                <div class="border-t border-indigo-200 bg-indigo-50 p-5 sm:p-6"><h3 class="font-black text-indigo-950">Todos los pedidos están preparados</h3><p class="mt-1 text-sm leading-6 text-indigo-900">Al confirmar, la salida de todos los productos se ejecutará dentro de una sola transacción. Si una existencia falla, no se descontará nada.</p><form class="mt-4" method="POST" action="{{ route('delivery-runs.load', $deliveryRun) }}" data-confirm="¿Confirmar la carga completa? Las cantidades dejarán de ser editables.">@csrf<button class="btn-primary" type="submit">Confirmar carga completa</button></form></div>
+                            @else
+                                <div class="border-t border-amber-200 bg-amber-50 p-5"><p class="font-bold text-amber-950">Faltan {{ $pendingPreparationCount }} {{ $pendingPreparationCount === 1 ? 'pedido' : 'pedidos' }}</p><p class="text-sm text-amber-900">Cuando todos estén preparados aparecerá el botón para confirmar la carga e iniciar la ruta.</p></div>
+                            @endif
                         @endif
                     </section>
                 @endif
@@ -155,11 +167,11 @@
                                             @endforelse
                                         </div>
                                         @if($canExecute && bccomp($runOrder->balance_due, '0', 4) > 0)
-                                            <form method="POST" action="{{ route('delivery-runs.orders.payments.store', [$deliveryRun, $runOrder]) }}" class="mt-5 grid gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 lg:grid-cols-[10rem_9rem_minmax(10rem,1fr)_auto]">
+                                            <form method="POST" action="{{ route('delivery-runs.orders.payments.store', [$deliveryRun, $runOrder]) }}" class="mt-5 grid gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 lg:grid-cols-[12rem_9rem_minmax(10rem,1fr)_auto]" data-payment-form>
                                                 @csrf
-                                                <div><label class="form-label" for="method-{{ $runOrder->id }}">Método *</label><select class="form-input" id="method-{{ $runOrder->id }}" name="method" required>@foreach($paymentMethods as $method)<option value="{{ $method->value }}">{{ $method->label() }}</option>@endforeach</select></div>
+                                                <div><label class="form-label" for="method-{{ $runOrder->id }}">Método *</label><select class="form-input" id="method-{{ $runOrder->id }}" name="method" required data-payment-method>@foreach($paymentMethods as $method)<option value="{{ $method->value }}" data-requires-reference="{{ $method->requiresReference() ? 'true' : 'false' }}">{{ $method->label() }}</option>@endforeach</select></div>
                                                 <div><label class="form-label" for="amount-{{ $runOrder->id }}">Monto *</label><input class="form-input" id="amount-{{ $runOrder->id }}" name="amount" type="number" min="0.0001" max="{{ $runOrder->balance_due }}" step="0.0001" required value="{{ $runOrder->balance_due }}"></div>
-                                                <div><label class="form-label" for="reference-{{ $runOrder->id }}">Referencia</label><input class="form-input" id="reference-{{ $runOrder->id }}" name="reference" maxlength="120" placeholder="Transferencia, cheque o tarjeta"></div>
+                                                <div><label class="form-label" for="reference-{{ $runOrder->id }}">Referencia <span data-reference-required-label></span></label><input class="form-input" id="reference-{{ $runOrder->id }}" name="reference" maxlength="120" placeholder="Número de transferencia, cheque o autorización" data-payment-reference></div>
                                                 <div class="flex items-end"><button class="btn-primary w-full" type="submit">Registrar cobro</button></div>
                                             </form>
                                         @endif

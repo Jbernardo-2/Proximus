@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\V1\SalesRouteController;
 use App\Http\Controllers\Api\V1\SettleDeliveryRunController;
 use App\Http\Controllers\Api\V1\StartDeliveryPreparationController;
 use App\Http\Controllers\Api\V1\SupplierController;
+use App\Http\Controllers\Api\V1\UpdateDeliveryOrderPreparationController;
 use App\Http\Controllers\Api\V1\UpdateDeliveryPreparationController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\VehicleController;
@@ -142,6 +143,10 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
                 ->name('delivery-runs.preparation.start');
             Route::put('/delivery-runs/{deliveryRun}/preparation', UpdateDeliveryPreparationController::class)
                 ->name('delivery-runs.preparation.update');
+            Route::scopeBindings()->put(
+                '/delivery-runs/{deliveryRun}/orders/{runOrder}/preparation',
+                UpdateDeliveryOrderPreparationController::class,
+            )->name('delivery-runs.orders.preparation.update');
             Route::post('/delivery-runs/{deliveryRun}/load', ConfirmDeliveryLoadController::class)
                 ->name('delivery-runs.load');
         });

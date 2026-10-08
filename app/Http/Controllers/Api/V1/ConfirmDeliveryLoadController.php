@@ -28,6 +28,7 @@ class ConfirmDeliveryLoadController extends Controller
             'vehicle',
             'runOrders.order',
             'runOrders.items',
+            'runOrders.preparedBy',
             'runOrders.payments',
         ])->loadCount('runOrders'));
     }

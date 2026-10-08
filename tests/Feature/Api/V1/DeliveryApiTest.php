@@ -118,10 +118,11 @@ class DeliveryApiTest extends TestCase
         $this->postJson("/api/v1/delivery-runs/{$runId}/preparation")
             ->assertOk()
             ->assertJsonPath('data.status', DeliveryRunStatus::Preparing->value);
-        $this->putJson("/api/v1/delivery-runs/{$runId}/preparation", [
+        $this->putJson("/api/v1/delivery-runs/{$runId}/orders/{$runOrder->id}/preparation", [
             'items' => [['id' => $runItem->id, 'prepared_quantity' => '3']],
         ])->assertOk()
-            ->assertJsonPath('data.orders.0.items.0.prepared_quantity', '3.000000');
+            ->assertJsonPath('data.status', DeliveryOrderStatus::Prepared->value)
+            ->assertJsonPath('data.items.0.prepared_quantity', '3.000000');
         $this->postJson("/api/v1/delivery-runs/{$runId}/load")
             ->assertOk()
             ->assertJsonPath('data.status', DeliveryRunStatus::Loaded->value)

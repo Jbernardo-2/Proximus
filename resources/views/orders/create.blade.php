@@ -16,38 +16,50 @@
             </div>
             <div class="grid gap-5 lg:grid-cols-2">
                 <div class="lg:col-span-2">
+                    <x-remote-picker
+                        name="customer_id"
+                        input-id="customer_id"
+                        label="Cliente"
+                        type="customer"
+                        :endpoint="route('lookups.customers')"
+                        :required="true"
+                        :selected-id="$selectedCustomer?->id"
+                        :selected-name="$selectedCustomer?->business_name"
+                        :selected-meta="$selectedCustomer ? implode(' · ', array_filter([$selectedCustomer->code, $selectedCustomer->business_type, $selectedCustomer->phone, $selectedCustomer->address])) : null"
+                        help="Busca por nombre, código, teléfono o dirección. Solo se descargan coincidencias, no toda la cartera."
+                    />
+                </div>
+                <div class="lg:col-span-2">
                     <label class="form-label" for="route_stop_id">Visita programada {{ $isPreventista ? '*' : '(opcional)' }}</label>
-                    <select class="form-input" id="route_stop_id" name="route_stop_id" @required($isPreventista) data-route-stop-select>
-                        <option value="">{{ $isPreventista ? 'Selecciona una visita…' : 'Pedido fuera de ruta' }}</option>
-                        @foreach ($routeStops as $stop)
-                            <option value="{{ $stop->id }}" data-customer-id="{{ $stop->customer_id }}" data-salesperson-id="{{ $stop->salesRoute->salesperson_id }}" @selected(old('route_stop_id', $selectedRouteStop?->id) === $stop->id)>
-                                {{ $stop->visit_day->label() }} #{{ $stop->visit_order }} · {{ $stop->salesRoute->name }} · {{ $stop->customer->business_name }}
+                    <select class="form-input" id="route_stop_id" name="route_stop_id" @required($isPreventista) data-route-stop-select data-route-required="{{ $isPreventista ? 'true' : 'false' }}">
+                        <option value="">{{ $isPreventista ? 'Primero busca un cliente…' : 'Pedido fuera de ruta' }}</option>
+                        @if($selectedRouteStop)
+                            <option value="{{ $selectedRouteStop->id }}" data-salesperson-id="{{ $selectedRouteStop->salesRoute->salesperson_id }}" selected>
+                                {{ $selectedRouteStop->visit_day->label() }} #{{ $selectedRouteStop->visit_order }} · {{ $selectedRouteStop->salesRoute->name }}
                             </option>
-                        @endforeach
+                        @endif
                     </select>
-                    @if ($routeStops->isEmpty())
+                    @if (! $hasAvailableVisits)
                         <p class="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">No hay visitas activas disponibles. Configura la ruta o solicita a supervisión que revise la asignación.</p>
                     @else
-                        <p class="form-help">Elegir una visita completa automáticamente el cliente y el preventista.</p>
+                        <p class="form-help">Al elegir el cliente aparecerán únicamente sus visitas activas.</p>
                     @endif
                 </div>
                 <div>
-                    <label class="form-label" for="customer_id">Cliente *</label>
-                    <select class="form-input" id="customer_id" name="customer_id" required data-order-customer-select>
-                        <option value="">Selecciona…</option>
-                        @foreach ($customers as $customer)
-                            <option value="{{ $customer->id }}" @selected(old('customer_id', $selectedRouteStop?->customer_id) === $customer->id)>{{ $customer->business_name }} · {{ $customer->code }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label" for="salesperson_id">Preventista responsable *</label>
-                    <select class="form-input" id="salesperson_id" name="salesperson_id" required data-order-salesperson-select>
-                        <option value="">Selecciona…</option>
-                        @foreach ($salespeople as $salesperson)
-                            <option value="{{ $salesperson->id }}" @selected((string) old('salesperson_id', $selectedRouteStop?->salesRoute?->salesperson_id ?? ($isPreventista ? auth()->id() : '')) === (string) $salesperson->id)>{{ $salesperson->name }}</option>
-                        @endforeach
-                    </select>
+                    @if($isPreventista)
+                        <label class="form-label">Preventista responsable</label>
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"><p class="font-bold text-emerald-950">{{ auth()->user()->name }}</p><p class="text-xs text-emerald-800">Asignado automáticamente desde tu sesión.</p></div>
+                        <input type="hidden" name="salesperson_id" value="{{ auth()->id() }}">
+                    @else
+                        <label class="form-label" for="salesperson_id">Preventista responsable *</label>
+                        <select class="form-input" id="salesperson_id" name="salesperson_id" required data-order-salesperson-select>
+                            <option value="">Selecciona…</option>
+                            @foreach ($salespeople as $salesperson)
+                                <option value="{{ $salesperson->id }}" @selected((string) old('salesperson_id', $selectedRouteStop?->salesRoute?->salesperson_id) === (string) $salesperson->id)>{{ $salesperson->name }}</option>
+                            @endforeach
+                        </select>
+                        <p class="form-help">Si eliges una visita, se usará el preventista asignado a esa ruta.</p>
+                    @endif
                 </div>
             </div>
         </section>
@@ -73,7 +85,7 @@
 
         <div class="flex flex-wrap justify-end gap-3">
             <a class="btn-secondary" href="{{ route('orders.index') }}">Cancelar</a>
-            <button class="btn-primary" @disabled(($routeStops->isEmpty() && $isPreventista) || $warehouses->isEmpty())>Crear borrador y agregar productos →</button>
+            <button class="btn-primary" @disabled((! $hasAvailableVisits && $isPreventista) || $warehouses->isEmpty())>Crear borrador y agregar productos →</button>
         </div>
     </form>
 @endsection

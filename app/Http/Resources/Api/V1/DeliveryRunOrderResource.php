@@ -14,6 +14,11 @@ class DeliveryRunOrderResource extends JsonResource
             'visit_order' => $this->visit_order,
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
+            'prepared_at' => $this->prepared_at?->toISOString(),
+            'prepared_by' => $this->whenLoaded('preparedBy', fn (): ?array => $this->preparedBy === null ? null : [
+                'id' => $this->preparedBy->id,
+                'name' => $this->preparedBy->name,
+            ]),
             'order' => $this->whenLoaded('order', fn (): array => [
                 'id' => $this->order->id,
                 'order_number' => $this->order->order_number,

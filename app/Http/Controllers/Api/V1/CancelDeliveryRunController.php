@@ -25,7 +25,7 @@ class CancelDeliveryRunController extends Controller
         );
 
         return new DeliveryRunResource($cancelled->load([
-            'warehouse', 'driver', 'vehicle', 'runOrders.order', 'runOrders.items', 'runOrders.payments',
+            'warehouse', 'driver', 'vehicle', 'runOrders.order', 'runOrders.items', 'runOrders.preparedBy', 'runOrders.payments',
         ])->loadCount('runOrders'));
     }
 }

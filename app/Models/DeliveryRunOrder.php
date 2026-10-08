@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['delivery_run_id', 'order_id', 'visit_order', 'status', 'requested_total', 'delivered_total', 'collected_total', 'balance_due', 'outcome_reason', 'outcome_notes', 'credit_reason', 'receiver_name', 'latitude', 'longitude', 'completed_at', 'completed_by'])]
+#[Fillable(['delivery_run_id', 'order_id', 'visit_order', 'status', 'prepared_at', 'prepared_by', 'requested_total', 'delivered_total', 'collected_total', 'balance_due', 'outcome_reason', 'outcome_notes', 'credit_reason', 'receiver_name', 'latitude', 'longitude', 'completed_at', 'completed_by'])]
 class DeliveryRunOrder extends Model
 {
     /** @use HasFactory<DeliveryRunOrderFactory> */
@@ -43,6 +43,11 @@ class DeliveryRunOrder extends Model
         return $this->belongsTo(User::class, 'completed_by');
     }
 
+    public function preparedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'prepared_by');
+    }
+
     protected function casts(): array
     {
         return [
@@ -54,6 +59,7 @@ class DeliveryRunOrder extends Model
             'balance_due' => 'decimal:4',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
+            'prepared_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }

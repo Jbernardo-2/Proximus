@@ -229,6 +229,7 @@ class DeliveryOperationsTest extends TestCase
         $this->assertSame('0.0000', $run->credit_total);
         $this->actingAs($supervisor)->get(route('delivery-runs.show', $run))
             ->assertOk()
+            ->assertSee('Transferencia bancaria')
             ->assertSee('Liquidar jornada');
 
         $this->actingAs($supervisor)->post(route('delivery-runs.settle', $run), [
@@ -489,6 +490,111 @@ class DeliveryOperationsTest extends TestCase
         $this->assertSame(OrderStatus::Assigned, $first['order']->refresh()->status);
         $this->assertSame(OrderStatus::Assigned, $second['order']->refresh()->status);
         $this->assertDatabaseCount('delivery_run_orders', 2);
+    }
+
+    public function test_warehouse_prepares_each_order_separately_before_atomic_load(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $bodeguero = User::factory()->create();
+        $driver = User::factory()->repartidor()->create();
+        $first = $this->confirmedOrder([['quantity' => '15', 'unit_price' => '10', 'on_hand' => '30']]);
+        $second = $this->confirmedOrder([['quantity' => '7', 'unit_price' => '12', 'on_hand' => '20']]);
+        $run = app(CreateDeliveryRunAction::class)->handle([
+            'warehouse_id' => $first['warehouse']->id,
+            'driver_id' => $driver->id,
+            'vehicle_id' => null,
+            'scheduled_date' => now()->toDateString(),
+            'client_reference' => null,
+            'notes' => null,
+        ], $supervisor);
+        $firstRunOrder = app(AssignOrderToDeliveryRunAction::class)->handle($run, $first['order'], $supervisor);
+        $secondRunOrder = app(AssignOrderToDeliveryRunAction::class)->handle($run, $second['order'], $supervisor);
+        app(StartDeliveryPreparationAction::class)->handle($run, $bodeguero);
+
+        $firstItem = $firstRunOrder->items()->sole();
+        $this->actingAs($bodeguero)
+            ->get(route('delivery-runs.orders.preparation.edit', [$run, $firstRunOrder]))
+            ->assertOk()
+            ->assertSee('Solicitado')
+            ->assertSee('value="0"', false)
+            ->assertSee('Guardar y volver a pendientes');
+        $this->actingAs($bodeguero)
+            ->put(route('delivery-runs.orders.preparation.update', [$run, $firstRunOrder]), [
+                'items' => [['id' => $firstItem->id, 'prepared_quantity' => '15']],
+            ])
+            ->assertRedirect(route('delivery-runs.show', $run).'#preparation-queue');
+
+        $this->assertSame(DeliveryOrderStatus::Prepared, $firstRunOrder->refresh()->status);
+        $this->assertSame(DeliveryOrderStatus::Pending, $secondRunOrder->refresh()->status);
+        $this->actingAs($bodeguero)
+            ->post(route('delivery-runs.load', $run))
+            ->assertSessionHasErrors('orders');
+        $this->assertDatabaseMissing('inventory_movements', [
+            'delivery_run_id' => $run->id,
+            'type' => InventoryMovementType::DispatchLoad->value,
+        ]);
+
+        $secondItem = $secondRunOrder->items()->sole();
+        $this->actingAs($bodeguero)
+            ->put(route('delivery-runs.orders.preparation.update', [$run, $secondRunOrder]), [
+                'items' => [['id' => $secondItem->id, 'prepared_quantity' => '7']],
+            ])
+            ->assertRedirect(route('delivery-runs.show', $run).'#preparation-queue');
+        $this->actingAs($bodeguero)
+            ->get(route('delivery-runs.show', $run))
+            ->assertOk()
+            ->assertSee('Todos los pedidos están preparados')
+            ->assertSee('Confirmar carga completa');
+        $this->actingAs($bodeguero)->post(route('delivery-runs.load', $run))->assertRedirect();
+
+        $this->assertSame(DeliveryRunStatus::Loaded, $run->refresh()->status);
+        $this->assertSame('15.000000', $first['lines'][0]['stock']->refresh()->quantity_on_hand);
+        $this->assertSame('13.000000', $second['lines'][0]['stock']->refresh()->quantity_on_hand);
+    }
+
+    public function test_dispatch_dashboard_sums_confirmed_orders_by_product_and_presentation(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $warehouse = Warehouse::query()->where('is_default', true)->sole();
+        $unit = MeasurementUnit::factory()->create(['name' => 'Unidad consolidada', 'symbol' => 'uc']);
+        $product = Product::factory()->for($unit, 'baseUnit')->create([
+            'name' => 'Producto Consolidado X',
+            'sku' => 'CON-X',
+        ]);
+        $presentation = ProductPresentation::factory()->for($product)->base()->create(['name' => 'Unidad']);
+
+        foreach (['15', '7'] as $index => $quantity) {
+            $order = Order::factory()->confirmed()->create([
+                'warehouse_id' => $warehouse->id,
+                'warehouse_code' => $warehouse->code,
+                'warehouse_name' => $warehouse->name,
+                'order_number' => 'PED-CONS-'.($index + 1),
+                'total' => bcmul($quantity, '10', 4),
+            ]);
+            OrderItem::factory()->for($order)->create([
+                'product_id' => $product->id,
+                'product_presentation_id' => $presentation->id,
+                'product_name' => $product->name,
+                'product_sku' => $product->sku,
+                'presentation_name' => $presentation->name,
+                'base_unit_symbol' => $unit->symbol,
+                'quantity' => $quantity,
+                'base_quantity' => $quantity,
+                'line_total' => bcmul($quantity, '10', 4),
+            ]);
+        }
+
+        $response = $this->actingAs($supervisor)->get(route('delivery-runs.index', [
+            'warehouse_id' => $warehouse->id,
+        ]));
+
+        $response
+            ->assertOk()
+            ->assertSee('Pedidos sin asignar')
+            ->assertSee('Consolidado por producto')
+            ->assertSee('Producto Consolidado X');
+        $this->assertSame(2, $response->viewData('pendingOrders')->total());
+        $this->assertSame('22', rtrim(rtrim((string) $response->viewData('consolidated')->first()->total_base_quantity, '0'), '.'));
     }
 
     /**

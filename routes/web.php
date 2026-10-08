@@ -11,10 +11,12 @@ use App\Http\Controllers\CompleteDeliveryStopController;
 use App\Http\Controllers\ConfirmDeliveryLoadController;
 use App\Http\Controllers\ConfirmOrderController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerLookupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryPaymentController;
 use App\Http\Controllers\DeliveryRunController;
 use App\Http\Controllers\DeliveryRunOrderController;
+use App\Http\Controllers\DeliveryRunOrderPreparationController;
 use App\Http\Controllers\DepartDeliveryRunController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
@@ -33,6 +35,7 @@ use App\Http\Controllers\PriceTierController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductConversionPreviewController;
 use App\Http\Controllers\ProductPresentationController;
+use App\Http\Controllers\ProductPresentationLookupController;
 use App\Http\Controllers\ProductSupplierController;
 use App\Http\Controllers\ReopenOrderController;
 use App\Http\Controllers\RequeueDeliveryOrderController;
@@ -62,6 +65,12 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
 Route::get('/dashboard', DashboardController::class)
     ->middleware(['auth', 'can:access-panel'])
     ->name('dashboard');
+
+Route::middleware(['auth', 'throttle:120,1'])->prefix('lookups')->name('lookups.')->group(function (): void {
+    Route::get('/customers', CustomerLookupController::class)->name('customers');
+    Route::get('/product-presentations', ProductPresentationLookupController::class)
+        ->name('product-presentations');
+});
 
 Route::middleware(['auth', 'can:manage-catalog'])->group(function (): void {
     Route::resource('categories', CategoryController::class)->except(['show']);
@@ -186,6 +195,10 @@ Route::middleware(['auth', 'can:access-panel', 'can:view-deliveries'])->group(fu
             ->name('delivery-runs.orders.store');
         Route::delete('/delivery-runs/{deliveryRun}/orders/{runOrder}', [DeliveryRunOrderController::class, 'destroy'])
             ->name('delivery-runs.orders.destroy');
+        Route::get('/delivery-runs/{deliveryRun}/orders/{runOrder}/preparation', [DeliveryRunOrderPreparationController::class, 'edit'])
+            ->name('delivery-runs.orders.preparation.edit');
+        Route::put('/delivery-runs/{deliveryRun}/orders/{runOrder}/preparation', [DeliveryRunOrderPreparationController::class, 'update'])
+            ->name('delivery-runs.orders.preparation.update');
         Route::put('/delivery-runs/{deliveryRun}/orders/{runOrder}/outcome', CompleteDeliveryStopController::class)
             ->name('delivery-runs.orders.outcome');
         Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/payments', [DeliveryPaymentController::class, 'store'])

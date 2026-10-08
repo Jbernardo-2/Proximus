@@ -46,8 +46,9 @@ class CreateOrderAction
                 throw new AuthorizationException('La visita ya no pertenece a una ruta asignada al usuario.');
             }
 
-            $salesperson = $salesRoute?->salesperson
-                ?? User::query()->findOrFail($data['salesperson_id']);
+            $salesperson = $actor->role === UserRole::Preventista
+                ? $actor
+                : ($salesRoute?->salesperson ?? User::query()->findOrFail($data['salesperson_id']));
             $warehouse = isset($data['warehouse_id'])
                 ? Warehouse::query()->findOrFail($data['warehouse_id'])
                 : Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->first();

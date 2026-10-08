@@ -21,7 +21,7 @@ class SettleDeliveryRunController extends Controller
         $settled = $settleDeliveryRun->handle($deliveryRun, $request->validated(), $user);
 
         return new DeliveryRunResource($settled->load([
-            'warehouse', 'driver', 'vehicle', 'runOrders.order', 'runOrders.items',
+            'warehouse', 'driver', 'vehicle', 'runOrders.order', 'runOrders.items', 'runOrders.preparedBy',
             'runOrders.payments.receivedBy', 'runOrders.payments.voidedBy',
         ])->loadCount('runOrders'));
     }
