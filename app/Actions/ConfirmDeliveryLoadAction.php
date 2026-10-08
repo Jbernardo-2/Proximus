@@ -45,6 +45,14 @@ class ConfirmDeliveryLoadAction
                 ]);
             }
 
+            $notPrepared = $runOrders->first(fn ($runOrder): bool => $runOrder->status !== DeliveryOrderStatus::Prepared);
+
+            if ($notPrepared !== null) {
+                throw ValidationException::withMessages([
+                    'orders' => ["Primero guarda la preparación del pedido {$notPrepared->order->order_number}."],
+                ]);
+            }
+
             foreach ($runOrders as $runOrder) {
                 $hasPreparedItem = $items
                     ->where('delivery_run_order_id', $runOrder->id)

@@ -52,6 +52,19 @@ class CustomerManagementTest extends TestCase
             ->assertSee('Frente a la escuela');
     }
 
+    public function test_customer_form_offers_current_location_map_and_manual_fallback(): void
+    {
+        $user = User::factory()->preventista()->create();
+
+        $this->actingAs($user)
+            ->get(route('customers.create'))
+            ->assertOk()
+            ->assertSee('Usar mi ubicación')
+            ->assertSee('data-location-map', false)
+            ->assertSee('data-location-latitude', false)
+            ->assertSee('Ver o escribir coordenadas manualmente');
+    }
+
     public function test_customer_creation_returns_validation_messages_for_missing_identity_and_location(): void
     {
         $user = User::factory()->preventista()->create();

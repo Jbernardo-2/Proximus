@@ -23,7 +23,7 @@ class DepartDeliveryRunController extends Controller
         $departedRun = $departDeliveryRun->handle($deliveryRun, $user);
 
         return new DeliveryRunResource($departedRun->load([
-            'warehouse', 'driver', 'vehicle', 'runOrders.order', 'runOrders.items', 'runOrders.payments',
+            'warehouse', 'driver', 'vehicle', 'runOrders.order', 'runOrders.items', 'runOrders.preparedBy', 'runOrders.payments',
         ])->loadCount('runOrders'));
     }
 }

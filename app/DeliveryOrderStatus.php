@@ -5,6 +5,7 @@ namespace App;
 enum DeliveryOrderStatus: string
 {
     case Pending = 'pending';
+    case Prepared = 'prepared';
     case Loaded = 'loaded';
     case Delivered = 'delivered';
     case PartiallyDelivered = 'partially_delivered';
@@ -14,7 +15,8 @@ enum DeliveryOrderStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::Pending => 'Pendiente',
+            self::Pending => 'Pendiente de preparar',
+            self::Prepared => 'Preparado',
             self::Loaded => 'Cargado',
             self::Delivered => 'Entregado',
             self::PartiallyDelivered => 'Entrega parcial',

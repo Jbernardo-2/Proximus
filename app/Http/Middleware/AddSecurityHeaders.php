@@ -21,7 +21,7 @@ class AddSecurityHeaders
         $response->headers->set('Content-Security-Policy', $this->contentSecurityPolicy());
         $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');
         $response->headers->set('Cross-Origin-Resource-Policy', 'same-origin');
-        $response->headers->set('Permissions-Policy', 'camera=(self), geolocation=(), microphone=()');
+        $response->headers->set('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=()');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'DENY');
@@ -53,7 +53,7 @@ class AddSecurityHeaders
             "font-src 'self' data:{$developmentHttpSources}",
             "form-action 'self'",
             "frame-ancestors 'none'",
-            "img-src 'self' data: blob:{$developmentHttpSources}",
+            "img-src 'self' data: blob: https://tile.openstreetmap.org{$developmentHttpSources}",
             "media-src 'self' blob:",
             "object-src 'none'",
             "script-src 'self' 'wasm-unsafe-eval'{$developmentHttpSources}",

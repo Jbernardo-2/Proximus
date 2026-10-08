@@ -1,3 +1,6 @@
+import './customer-location.js';
+import './remote-picker.js';
+
 const mobileMenuButton = document.querySelector('[data-mobile-menu-button]');
 const mobileMenu = document.querySelector('[data-mobile-menu]');
 
@@ -337,32 +340,51 @@ const orderCreateForm = document.querySelector('[data-order-create-form]');
 
 if (orderCreateForm) {
     const routeStopSelect = orderCreateForm.querySelector('[data-route-stop-select]');
-    const customerSelect = orderCreateForm.querySelector('[data-order-customer-select]');
     const salespersonSelect = orderCreateForm.querySelector('[data-order-salesperson-select]');
 
-    const applyRouteStop = () => {
-        const option = routeStopSelect?.selectedOptions?.[0];
-
-        if (! option?.value) {
+    orderCreateForm.addEventListener('remote-picker:selected', (event) => {
+        if (event.target.dataset.pickerType !== 'customer') {
             return;
         }
 
-        if (option.dataset.customerId) {
-            customerSelect.value = option.dataset.customerId;
-        }
+        const emptyLabel = routeStopSelect.dataset.routeRequired === 'true'
+            ? 'Selecciona una visita…'
+            : 'Pedido fuera de ruta';
+        routeStopSelect.replaceChildren(new Option(emptyLabel, ''));
 
-        if (option.dataset.salespersonId) {
-            salespersonSelect.value = option.dataset.salespersonId;
-        }
-    };
+        event.detail.route_stops.forEach((stop) => {
+            const option = new Option(`${stop.visit_day_label} #${stop.visit_order} · ${stop.route_name}`, stop.id);
+            option.dataset.salespersonId = stop.salesperson_id ?? '';
+            routeStopSelect.add(option);
+        });
 
-    routeStopSelect?.addEventListener('change', applyRouteStop);
-    applyRouteStop();
+        if (event.detail.route_stops.length === 1) {
+            routeStopSelect.value = event.detail.route_stops[0].id;
+            routeStopSelect.dispatchEvent(new Event('change'));
+        }
+    });
+
+    orderCreateForm.addEventListener('remote-picker:cleared', (event) => {
+        if (event.target.dataset.pickerType === 'customer') {
+            routeStopSelect.replaceChildren(new Option(
+                routeStopSelect.dataset.routeRequired === 'true' ? 'Primero busca un cliente…' : 'Pedido fuera de ruta',
+                '',
+            ));
+        }
+    });
+
+    routeStopSelect?.addEventListener('change', () => {
+        const salespersonId = routeStopSelect.selectedOptions[0]?.dataset.salespersonId;
+
+        if (salespersonId && salespersonSelect) {
+            salespersonSelect.value = salespersonId;
+        }
+    });
 }
 
 document.querySelectorAll('[data-order-item-form]').forEach((form) => {
     const button = form.querySelector('[data-order-quote-button]');
-    const presentation = form.querySelector('[data-order-presentation-select]');
+    const presentation = form.querySelector('[data-product-presentation-value]');
     const quantity = form.querySelector('[data-order-quantity-input]');
     const output = form.querySelector('[data-order-quote-output]');
 
@@ -422,6 +444,48 @@ document.querySelectorAll('[data-order-item-form]').forEach((form) => {
             button.disabled = false;
         }
     });
+});
+
+document.querySelectorAll('[data-preparation-form]').forEach((form) => {
+    const quantityInputs = form.querySelectorAll('[data-zero-safe-quantity]');
+
+    quantityInputs.forEach((input) => {
+        input.addEventListener('focus', () => input.select());
+        input.addEventListener('mouseup', (event) => event.preventDefault());
+    });
+
+    form.querySelectorAll('[data-fill-requested]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const input = button.closest('div')?.parentElement?.querySelector('[data-zero-safe-quantity]');
+
+            if (input) {
+                input.value = button.dataset.fillRequested;
+                input.focus();
+            }
+        });
+    });
+
+    form.querySelector('[data-fill-all-requested]')?.addEventListener('click', () => {
+        quantityInputs.forEach((input) => {
+            input.value = input.dataset.requestedQuantity;
+        });
+        quantityInputs[0]?.focus();
+    });
+});
+
+document.querySelectorAll('[data-payment-form]').forEach((form) => {
+    const method = form.querySelector('[data-payment-method]');
+    const reference = form.querySelector('[data-payment-reference]');
+    const requiredLabel = form.querySelector('[data-reference-required-label]');
+
+    const syncReference = () => {
+        const isRequired = method.selectedOptions[0]?.dataset.requiresReference === 'true';
+        reference.required = isRequired;
+        requiredLabel.textContent = isRequired ? '*' : '(opcional)';
+    };
+
+    method.addEventListener('change', syncReference);
+    syncReference();
 });
 
 function showOrderQuoteError(output, message) {

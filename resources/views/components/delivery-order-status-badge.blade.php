@@ -3,6 +3,7 @@
 @php
     $classes = match ($status) {
         \App\DeliveryOrderStatus::Pending => 'bg-stone-100 text-stone-700',
+        \App\DeliveryOrderStatus::Prepared => 'bg-amber-100 text-amber-800',
         \App\DeliveryOrderStatus::Loaded => 'bg-sky-100 text-sky-800',
         \App\DeliveryOrderStatus::Delivered => 'bg-emerald-100 text-emerald-800',
         \App\DeliveryOrderStatus::PartiallyDelivered => 'bg-amber-100 text-amber-800',

@@ -9,7 +9,6 @@ use App\Http\Requests\UpdateOrderRequest;
 use App\Models\Customer;
 use App\Models\InventoryStock;
 use App\Models\Order;
-use App\Models\Product;
 use App\Models\RouteStop;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -75,37 +74,51 @@ class OrderController extends Controller
         Gate::authorize('create', Order::class);
         /** @var User $user */
         $user = $request->user();
-        $routeStops = RouteStop::query()
+        $selectedRouteStopId = old('route_stop_id', $request->input('route_stop_id'));
+        $selectedRouteStop = RouteStop::query()
             ->with(['customer', 'salesRoute.salesperson'])
             ->where('is_active', true)
+            ->whereKey($selectedRouteStopId)
             ->whereHas('customer', fn ($query) => $query->active())
             ->whereHas('salesRoute', function ($query) use ($user): void {
                 $query->active()
                     ->when($user->role === UserRole::Preventista, fn ($routes) => $routes->where('salesperson_id', $user->id));
             })
-            ->orderBy('visit_day')
-            ->orderBy('visit_order')
-            ->orderBy('id')
-            ->get();
-        $customers = $user->role === UserRole::Preventista
-            ? $routeStops->pluck('customer')->unique('id')->sortBy('business_name')->values()
-            : Customer::query()->active()->orderBy('business_name')->orderBy('id')->get();
-        $salespeople = User::query()
-            ->where('role', UserRole::Preventista->value)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get();
-        $selectedRouteStop = $routeStops->firstWhere('id', $request->string('route_stop_id')->toString());
+            ->first();
+        $oldCustomerId = old('customer_id');
+        $selectedCustomer = $selectedRouteStop?->customer;
+
+        if ($selectedCustomer === null && $oldCustomerId) {
+            $selectedCustomer = Customer::query()
+                ->active()
+                ->when($user->role === UserRole::Preventista, fn ($query) => $query->whereHas(
+                    'routeStops',
+                    fn ($stops) => $stops
+                        ->where('is_active', true)
+                        ->whereHas('salesRoute', fn ($routes) => $routes
+                            ->active()
+                            ->where('salesperson_id', $user->id)),
+                ))
+                ->find($oldCustomerId);
+        }
 
         return view('orders.create', [
-            'routeStops' => $routeStops,
-            'customers' => $customers,
-            'salespeople' => $salespeople,
             'selectedRouteStop' => $selectedRouteStop,
+            'selectedCustomer' => $selectedCustomer,
+            'salespeople' => $user->role === UserRole::Preventista ? collect() : User::query()
+                ->where('role', UserRole::Preventista->value)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->orderBy('id')
+                ->get(),
             'paymentTerms' => PaymentTerm::cases(),
             'warehouses' => Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->get(),
             'isPreventista' => $user->role === UserRole::Preventista,
+            'hasAvailableVisits' => $user->role !== UserRole::Preventista || RouteStop::query()
+                ->where('is_active', true)
+                ->whereHas('customer', fn ($query) => $query->active())
+                ->whereHas('salesRoute', fn ($query) => $query->active()->where('salesperson_id', $user->id))
+                ->exists(),
         ]);
     }
 
@@ -147,25 +160,9 @@ class OrderController extends Controller
             'statusHistory' => fn ($query) => $query->with('changedBy')->latest()->orderByDesc('id'),
         ]);
         $canUpdate = Gate::forUser($user)->allows('update', $order);
-        $products = $canUpdate ? Product::query()
-            ->active()
-            ->with([
-                'baseUnit',
-                'presentations' => fn ($query) => $query
-                    ->active()
-                    ->where('is_sellable', true)
-                    ->with('priceTiers')
-                    ->orderByDesc('conversion_factor')
-                    ->orderBy('name'),
-            ])
-            ->whereHas('presentations', fn ($query) => $query->active()->where('is_sellable', true))
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get() : collect();
 
         return view('orders.show', [
             'order' => $order,
-            'products' => $products,
             'paymentTerms' => PaymentTerm::cases(),
             'warehouses' => $canUpdate
                 ? Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->get()

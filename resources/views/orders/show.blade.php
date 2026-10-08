@@ -65,24 +65,22 @@
                             <h2 class="mt-1 text-lg font-black text-ink-950">Presentación y cantidad</h2>
                             <p class="text-sm text-ink-600">El precio normal o por cantidad se calcula solo. La conversión se muestra como sugerencia y nunca modifica el pedido automáticamente.</p>
                         </div>
-                        @if ($products->isEmpty())
-                            <x-empty-state title="Sin presentaciones vendibles" description="Activa al menos un producto y una presentación de venta en el catálogo." />
-                        @else
-                            <form method="POST" action="{{ route('orders.items.store', $order) }}" class="space-y-4" data-order-item-form data-quote-url="{{ route('orders.item-quote', $order) }}">
+                        <form method="POST" action="{{ route('orders.items.store', $order) }}" class="space-y-4" data-order-item-form data-quote-url="{{ route('orders.item-quote', $order) }}">
                                 @csrf
                                 <div class="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_9rem_auto]">
                                     <div>
-                                        <label class="form-label" for="product_presentation_id">Producto y presentación *</label>
-                                        <select class="form-input" id="product_presentation_id" name="product_presentation_id" required data-order-presentation-select>
-                                            <option value="">Selecciona…</option>
-                                            @foreach ($products as $product)
-                                                <optgroup label="{{ $product->name }} · {{ $product->sku }}">
-                                                    @foreach ($product->presentations as $presentation)
-                                                        <option value="{{ $presentation->id }}" @selected(old('product_presentation_id') === $presentation->id)>{{ $presentation->name }} · 1 = {{ rtrim(rtrim($presentation->conversion_factor, '0'), '.') }} {{ $product->baseUnit->symbol }} · {{ $order->currency }} {{ number_format((float) $presentation->sale_price, 2) }}</option>
-                                                    @endforeach
-                                                </optgroup>
-                                            @endforeach
-                                        </select>
+                                        <x-remote-picker
+                                            name="product_presentation_id"
+                                            input-id="product_presentation_id"
+                                            label="Producto y presentación"
+                                            type="product"
+                                            :endpoint="route('lookups.product-presentations')"
+                                            mode="sellable"
+                                            :warehouse-id="$order->warehouse_id"
+                                            :required="true"
+                                            :selected-id="old('product_presentation_id')"
+                                            :scanner="true"
+                                        />
                                     </div>
                                     <div><label class="form-label" for="quantity">Cantidad *</label><input class="form-input" id="quantity" name="quantity" type="number" min="0.000001" step="0.000001" required value="{{ old('quantity', 1) }}" data-order-quantity-input></div>
                                     <div class="flex items-end"><button class="btn-secondary w-full" type="button" data-order-quote-button>Ver precio</button></div>
@@ -99,8 +97,7 @@
                                 @endif
                                 <div><label class="form-label" for="item_notes">Nota de la línea</label><input class="form-input" id="item_notes" name="notes" maxlength="1000" value="{{ old('notes') }}" placeholder="Opcional"></div>
                                 <div class="flex justify-end"><button class="btn-primary" type="submit">Agregar al pedido</button></div>
-                            </form>
-                        @endif
+                        </form>
                     </section>
                 @endif
 
@@ -127,7 +124,21 @@
                                                             <div class="mt-2 w-[24rem] max-w-[80vw] rounded-2xl border border-stone-200 bg-white p-4 text-left shadow-lg">
                                                                 <form method="POST" action="{{ route('orders.items.update', [$order, $item]) }}" class="space-y-3">
                                                                     @csrf @method('PUT')
-                                                                    <div><label class="form-label" for="presentation-{{ $item->id }}">Presentación</label><select class="form-input" id="presentation-{{ $item->id }}" name="product_presentation_id" required>@foreach($products as $product)<optgroup label="{{ $product->name }}">@foreach($product->presentations as $presentation)<option value="{{ $presentation->id }}" @selected($presentation->id === $item->product_presentation_id)>{{ $presentation->name }}</option>@endforeach</optgroup>@endforeach</select></div>
+                                                                    <x-remote-picker
+                                                                        name="product_presentation_id"
+                                                                        input-id="presentation-{{ $item->id }}"
+                                                                        label="Presentación"
+                                                                        type="product"
+                                                                        :endpoint="route('lookups.product-presentations')"
+                                                                        mode="sellable"
+                                                                        :warehouse-id="$order->warehouse_id"
+                                                                        :required="true"
+                                                                        :selected-id="$item->product_presentation_id"
+                                                                        :selected-name="$item->product_name.' · '.$item->presentation_name"
+                                                                        :selected-meta="$item->product_sku.' · '.$order->currency.' '.number_format((float) $item->standard_unit_price, 2)"
+                                                                        :selected-image-url="$item->product?->image_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($item->product->image_path) : null"
+                                                                        :scanner="true"
+                                                                    />
                                                                     <div><label class="form-label" for="quantity-{{ $item->id }}">Cantidad</label><input class="form-input" id="quantity-{{ $item->id }}" name="quantity" type="number" min="0.000001" step="0.000001" required value="{{ $item->quantity }}"></div>
                                                                     @if ($canOverridePrice)
                                                                         <div><label class="form-label" for="price-{{ $item->id }}">Precio unitario</label><input class="form-input" id="price-{{ $item->id }}" name="unit_price" type="number" min="0" step="0.0001" value="{{ $item->price_source === \App\OrderPriceSource::Override ? $item->unit_price : '' }}" placeholder="Vacío recalcula"></div>

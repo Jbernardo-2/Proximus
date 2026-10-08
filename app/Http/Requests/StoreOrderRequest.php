@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Order;
 use App\Models\RouteStop;
+use App\Models\SalesRoute;
 use App\PaymentTerm;
 use App\UserRole;
 use Illuminate\Database\Query\Builder;
@@ -19,10 +20,21 @@ class StoreOrderRequest extends OrderRequest
 
     protected function prepareForValidation(): void
     {
+        $routeStopId = $this->nullableIdentifier('route_stop_id');
+        $routeSalespersonId = $routeStopId === null
+            ? null
+            : RouteStop::query()->whereKey($routeStopId)->value('sales_route_id');
+        $routeSalespersonId = $routeSalespersonId === null
+            ? null
+            : SalesRoute::query()->whereKey($routeSalespersonId)->value('salesperson_id');
+        $salespersonId = $this->user()?->role === UserRole::Preventista
+            ? $this->user()?->id
+            : ($routeSalespersonId ?? $this->nullableIdentifier('salesperson_id'));
+
         $this->merge([
             'client_reference' => $this->nullableString('client_reference'),
-            'route_stop_id' => $this->nullableIdentifier('route_stop_id'),
-            'salesperson_id' => $this->nullableIdentifier('salesperson_id'),
+            'route_stop_id' => $routeStopId,
+            'salesperson_id' => $salespersonId,
             'warehouse_id' => $this->nullableIdentifier('warehouse_id'),
             'order_date' => $this->input('order_date') ?: now()->toDateString(),
             'requested_delivery_date' => $this->nullableIdentifier('requested_delivery_date'),

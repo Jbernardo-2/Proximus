@@ -9,7 +9,6 @@ use App\Http\Requests\UpdateInventoryDocumentRequest;
 use App\InventoryDocumentStatus;
 use App\InventoryDocumentType;
 use App\Models\InventoryDocument;
-use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -90,15 +89,6 @@ class InventoryDocumentController extends Controller
         return view('inventory.documents.show', [
             'document' => $inventoryDocument,
             'canUpdate' => $canUpdate,
-            'products' => $canUpdate ? Product::query()
-                ->active()
-                ->with([
-                    'baseUnit',
-                    'presentations' => fn ($query) => $query->active()->orderByDesc('conversion_factor')->orderBy('name'),
-                ])
-                ->whereHas('presentations', fn ($query) => $query->active())
-                ->orderBy('name')
-                ->get() : collect(),
         ]);
     }
 

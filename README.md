@@ -1,6 +1,6 @@
 # Proximus
 
-API y panel web para administrar una operación de preventa, bodega y reparto. Actualmente cubre usuarios y roles, catálogo, clientes, rutas, pedidos, bodegas e inventario.
+API y panel web para administrar una operación de preventa, bodega y reparto. Actualmente cubre usuarios y roles, catálogo, clientes, rutas, pedidos, bodegas, inventario, preparación, entrega, cobros y liquidación.
 
 No es multiempresa y no emite facturas fiscales.
 
@@ -60,6 +60,16 @@ composer run dev
 - Los conteos son ciegos mientras están en proceso y se rechazan si la existencia cambió después de iniciar el conteo.
 - Lotes y fechas de vencimiento son opcionales por producto. Si se activan, pasan a ser obligatorios en cada movimiento de ese producto.
 - El sistema inicia con `BOD-001`, pero el modelo, el panel y la API soportan varias bodegas.
+
+## Operación y reparto
+
+- Los clientes pueden ubicarse con el GPS del dispositivo, tocando un mapa de OpenStreetMap o escribiendo coordenadas manualmente.
+- Clientes, productos y presentaciones se buscan de forma paginada; el HTML no precarga catálogos completos. Los productos admiten búsqueda por nombre, SKU, código de barras, marca o categoría.
+- Los campos de producto aceptan lectores USB/Bluetooth como teclado y, en navegadores compatibles, lectura con cámara.
+- El preventista autenticado queda asignado por el servidor; no se confía en un identificador enviado por el navegador.
+- Bodega prepara y guarda cada pedido por separado. Solo cuando todos están listos se confirma la carga completa en una transacción atómica.
+- El tablero de despacho muestra pedidos confirmados pendientes, alertas operativas y un consolidado por producto y presentación.
+- Los cobros admiten efectivo, transferencia bancaria, tarjeta, cheque y otros; los métodos electrónicos exigen referencia.
 
 ## API
 

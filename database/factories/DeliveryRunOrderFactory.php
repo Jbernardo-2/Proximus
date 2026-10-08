@@ -25,6 +25,8 @@ class DeliveryRunOrderFactory extends Factory
             'order_id' => Order::factory()->confirmed(),
             'visit_order' => fake()->numberBetween(1, 100),
             'status' => DeliveryOrderStatus::Pending,
+            'prepared_at' => null,
+            'prepared_by' => null,
             'requested_total' => '100.0000',
             'delivered_total' => '0.0000',
             'collected_total' => '0.0000',

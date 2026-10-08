@@ -14,7 +14,7 @@ enum PaymentMethod: string
     {
         return match ($this) {
             self::Cash => 'Efectivo',
-            self::BankTransfer => 'Transferencia',
+            self::BankTransfer => 'Transferencia bancaria',
             self::Card => 'Tarjeta',
             self::Check => 'Cheque',
             self::Other => 'Otro',
