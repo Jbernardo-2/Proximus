@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\V1\CompleteDeliveryStopController;
 use App\Http\Controllers\Api\V1\ConfirmDeliveryLoadController;
 use App\Http\Controllers\Api\V1\ConfirmOrderController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\CustomerCreditController;
+use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryRunController;
 use App\Http\Controllers\Api\V1\DeliveryRunOrderController;
@@ -61,6 +63,16 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
 
         Route::middleware(['abilities:customers:manage', 'can:manage-customers'])->group(function (): void {
             Route::apiResource('customers', CustomerController::class);
+        });
+
+        Route::middleware(['abilities:credits:view', 'can:view-customer-credit'])->group(function (): void {
+            Route::get('/customers/{customer}/credit', CustomerCreditController::class)
+                ->name('customers.credit.show');
+        });
+
+        Route::middleware(['abilities:payments:record', 'can:record-customer-payments'])->group(function (): void {
+            Route::post('/customers/{customer}/payments', [CustomerPaymentController::class, 'store'])
+                ->name('customers.payments.store');
         });
 
         Route::middleware(['abilities:routes:view', 'can:view-routes'])->group(function (): void {

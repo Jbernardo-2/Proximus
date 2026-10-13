@@ -24,7 +24,7 @@
                         Acceso al panel de operaciones
                     </span>
                     <h1 class="mt-5 text-4xl font-semibold tracking-[-0.035em] text-ink-950 sm:text-[2.75rem] sm:leading-[1.08]">Bienvenido de nuevo</h1>
-                    <p class="mt-3 max-w-sm text-sm leading-6 text-ink-600">Ingresa tus credenciales para continuar administrando el catálogo de Proximus.</p>
+                    <p class="mt-3 max-w-sm text-sm leading-6 text-ink-600">Ingresa tus credenciales para continuar administrando las operaciones en Proximus.</p>
                 </div>
 
                 @if ($errors->any())
@@ -142,8 +142,7 @@
                         <span class="h-px w-7 bg-sun-500" aria-hidden="true"></span>
                         Bodega · Ruta · Entrega
                     </div>
-                    <h2 class="mt-2 text-xl font-semibold leading-tight tracking-tight sm:text-2xl lg:mt-3 lg:text-3xl xl:text-4xl">Tu operación, siempre en movimiento.</h2>
-                    <p class="mt-2 hidden max-w-lg text-sm leading-6 text-white/75 sm:block lg:mt-3 lg:text-base">Productos, precios y presentaciones organizados para que cada pedido avance por la ruta correcta.</p>
+
                 </div>
             </div>
         </section>

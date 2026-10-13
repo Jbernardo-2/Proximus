@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\OrderStatus;
 use App\PaymentTerm;
+use App\Services\CustomerCreditService;
 use App\Services\OrderConversionSuggestionService;
 use App\UserRole;
 use DateTimeImmutable;
@@ -135,6 +136,7 @@ class OrderController extends Controller
         Request $request,
         Order $order,
         OrderConversionSuggestionService $conversionSuggestions,
+        CustomerCreditService $customerCredit,
     ): View {
         Gate::authorize('view', $order);
         /** @var User $user */
@@ -172,6 +174,7 @@ class OrderController extends Controller
             'canCancel' => Gate::forUser($user)->allows('cancel', $order),
             'canReopen' => Gate::forUser($user)->allows('reopen', $order),
             'canViewDeliveries' => $user->canViewDeliveries(),
+            'creditSummary' => $customerCredit->summary($order->customer, $order),
             'conversionSuggestions' => $canUpdate && $order->items->isNotEmpty()
                 ? $conversionSuggestions->forOrder($order)
                 : [],

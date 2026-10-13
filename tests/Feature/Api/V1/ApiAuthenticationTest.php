@@ -27,23 +27,27 @@ class ApiAuthenticationTest extends TestCase
             ->assertJsonPath('token_type', 'Bearer')
             ->assertJsonPath('abilities.0', 'catalog:manage')
             ->assertJsonPath('abilities.1', 'customers:manage')
-            ->assertJsonPath('abilities.2', 'routes:view')
-            ->assertJsonPath('abilities.3', 'routes:manage')
-            ->assertJsonPath('abilities.4', 'orders:view')
-            ->assertJsonPath('abilities.5', 'orders:manage')
-            ->assertJsonPath('abilities.6', 'orders:override')
-            ->assertJsonPath('abilities.7', 'orders:lifecycle')
-            ->assertJsonPath('abilities.8', 'inventory:view')
-            ->assertJsonPath('abilities.9', 'inventory:operate')
-            ->assertJsonPath('abilities.10', 'inventory:adjust')
-            ->assertJsonPath('abilities.11', 'inventory:configure')
-            ->assertJsonPath('abilities.12', 'deliveries:view')
-            ->assertJsonPath('abilities.13', 'deliveries:manage')
-            ->assertJsonPath('abilities.14', 'deliveries:prepare')
-            ->assertJsonPath('abilities.15', 'deliveries:execute')
-            ->assertJsonPath('abilities.16', 'deliveries:settle')
-            ->assertJsonPath('abilities.17', 'vehicles:manage')
-            ->assertJsonPath('abilities.18', 'users:manage')
+            ->assertJsonPath('abilities.2', 'credits:view')
+            ->assertJsonPath('abilities.3', 'credits:configure')
+            ->assertJsonPath('abilities.4', 'payments:record')
+            ->assertJsonPath('abilities.5', 'payments:reverse')
+            ->assertJsonPath('abilities.6', 'routes:view')
+            ->assertJsonPath('abilities.7', 'routes:manage')
+            ->assertJsonPath('abilities.8', 'orders:view')
+            ->assertJsonPath('abilities.9', 'orders:manage')
+            ->assertJsonPath('abilities.10', 'orders:override')
+            ->assertJsonPath('abilities.11', 'orders:lifecycle')
+            ->assertJsonPath('abilities.12', 'inventory:view')
+            ->assertJsonPath('abilities.13', 'inventory:operate')
+            ->assertJsonPath('abilities.14', 'inventory:adjust')
+            ->assertJsonPath('abilities.15', 'inventory:configure')
+            ->assertJsonPath('abilities.16', 'deliveries:view')
+            ->assertJsonPath('abilities.17', 'deliveries:manage')
+            ->assertJsonPath('abilities.18', 'deliveries:prepare')
+            ->assertJsonPath('abilities.19', 'deliveries:execute')
+            ->assertJsonPath('abilities.20', 'deliveries:settle')
+            ->assertJsonPath('abilities.21', 'vehicles:manage')
+            ->assertJsonPath('abilities.22', 'users:manage')
             ->assertJsonPath('user.email', $user->email)
             ->assertJsonPath('user.role', 'admin')
             ->assertJsonPath('expires_at', fn (mixed $expiresAt): bool => is_string($expiresAt) && $expiresAt !== '');
@@ -53,7 +57,7 @@ class ApiAuthenticationTest extends TestCase
         ]);
         $accessToken = $user->tokens()->firstOrFail();
         $this->assertSame(
-            ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage', 'users:manage'],
+            ['catalog:manage', 'customers:manage', 'credits:view', 'credits:configure', 'payments:record', 'payments:reverse', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage', 'users:manage'],
             $accessToken->abilities,
         );
         $this->assertNotNull($accessToken->expires_at);

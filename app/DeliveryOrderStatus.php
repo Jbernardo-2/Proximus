@@ -7,6 +7,7 @@ enum DeliveryOrderStatus: string
     case Pending = 'pending';
     case Prepared = 'prepared';
     case Loaded = 'loaded';
+    case AwaitingPayment = 'awaiting_payment';
     case Delivered = 'delivered';
     case PartiallyDelivered = 'partially_delivered';
     case NotDelivered = 'not_delivered';
@@ -18,6 +19,7 @@ enum DeliveryOrderStatus: string
             self::Pending => 'Pendiente de preparar',
             self::Prepared => 'Preparado',
             self::Loaded => 'Cargado',
+            self::AwaitingPayment => 'Pendiente de cobro',
             self::Delivered => 'Entregado',
             self::PartiallyDelivered => 'Entrega parcial',
             self::NotDelivered => 'No entregado',

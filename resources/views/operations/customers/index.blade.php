@@ -48,13 +48,14 @@
             </div>
         @else
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[940px]">
+                <table class="w-full min-w-[1040px]">
                     <thead class="bg-stone-50">
                         <tr>
                             <th class="table-heading">Negocio</th>
                             <th class="table-heading">Contacto</th>
                             <th class="table-heading">Ubicación</th>
                             <th class="table-heading">Visitas</th>
+                            <th class="table-heading text-right">Saldo</th>
                             <th class="table-heading">Estado</th>
                             <th class="table-heading text-right">Acciones</th>
                         </tr>
@@ -72,6 +73,7 @@
                                 </td>
                                 <td class="table-cell"><p class="max-w-xs truncate" title="{{ $customer->address }}">{{ $customer->address }}</p></td>
                                 <td class="table-cell"><span class="inline-flex rounded-full bg-mint-100 px-2.5 py-1 text-xs font-semibold text-leaf-700">{{ $customer->route_stops_count }}</span></td>
+                                <td class="table-cell text-right font-black {{ (float) ($customer->outstanding_balance ?? 0) > 0 ? 'text-amber-700' : 'text-emerald-700' }}">HNL {{ number_format((float) ($customer->outstanding_balance ?? 0), 2) }}</td>
                                 <td class="table-cell"><x-status-badge :active="$customer->is_active" /></td>
                                 <td class="table-cell">
                                     <div class="flex justify-end gap-2">

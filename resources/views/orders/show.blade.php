@@ -86,6 +86,25 @@
                                     <div class="flex items-end"><button class="btn-secondary w-full" type="button" data-order-quote-button>Ver precio</button></div>
                                 </div>
                                 <div class="hidden" data-order-quote-output></div>
+                                <dialog class="m-auto w-full max-w-[calc(100%-2rem)] rounded-2xl border border-amber-200 bg-white p-0 shadow-2xl backdrop:bg-ink-950/70 sm:max-w-lg" aria-labelledby="stock-warning-title" data-stock-warning-dialog>
+                                    <div class="p-5 sm:p-6">
+                                        <div class="flex items-start gap-4">
+                                            <span class="grid size-11 shrink-0 place-items-center rounded-full bg-amber-100 text-xl text-amber-800" aria-hidden="true">!</span>
+                                            <div>
+                                                <h3 class="text-lg font-black text-ink-950" id="stock-warning-title">Producto sin disponibilidad suficiente</h3>
+                                                <p class="mt-1 text-sm leading-6 text-ink-600">El producto <strong data-stock-warning-product></strong> no está disponible en la cantidad solicitada. Puedes cancelar o agregarlo pensando en reabastecerlo antes de la entrega.</p>
+                                            </div>
+                                        </div>
+                                        <dl class="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-amber-50 p-4 text-sm">
+                                            <div><dt class="text-xs font-semibold text-amber-800 uppercase">Disponible ahora</dt><dd class="mt-1 font-black text-amber-950" data-stock-warning-available></dd></div>
+                                            <div><dt class="text-xs font-semibold text-amber-800 uppercase">Faltante proyectado</dt><dd class="mt-1 font-black text-red-700" data-stock-warning-shortage></dd></div>
+                                        </dl>
+                                        <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                                            <button class="btn-secondary" type="button" data-stock-warning-cancel>Cancelar</button>
+                                            <button class="btn-primary" type="button" data-stock-warning-accept>Agregar producto de todos modos</button>
+                                        </div>
+                                    </div>
+                                </dialog>
                                 @if ($canOverridePrice)
                                     <details class="rounded-xl border border-stone-200 bg-stone-50 p-4">
                                         <summary class="cursor-pointer text-sm font-semibold text-ink-800">Autorizar un precio diferente</summary>
@@ -179,7 +198,21 @@
                         <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
                             <h3 class="font-bold text-emerald-950">Confirmar para bodega</h3>
                             <p class="mt-1 text-sm leading-6 text-emerald-900">Al confirmar, productos, cantidades y precios quedan bloqueados. La mercancía se compromete en {{ $order->warehouse_name }}; si falta stock, el pedido mostrará la diferencia pendiente sin ocultarla.</p>
-                            <form class="mt-4" method="POST" action="{{ route('orders.confirm', $order) }}" data-confirm="¿Confirmar el pedido? Después solo supervisión podrá reabrirlo.">@csrf<button class="btn-primary" type="submit">Confirmar pedido</button></form>
+                            @if($order->payment_term === \App\PaymentTerm::Credit)
+                                <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                                    <div class="rounded-xl bg-white p-3"><p class="text-xs font-bold text-ink-600 uppercase">Límite</p><p class="mt-1 font-black">{{ $order->currency }} {{ number_format((float) $creditSummary['credit_limit'], 2) }}</p></div>
+                                    <div class="rounded-xl bg-white p-3"><p class="text-xs font-bold text-ink-600 uppercase">Comprometido</p><p class="mt-1 font-black">{{ $order->currency }} {{ number_format((float) $creditSummary['exposure'], 2) }}</p></div>
+                                    <div class="rounded-xl bg-white p-3"><p class="text-xs font-bold text-ink-600 uppercase">Disponible</p><p class="mt-1 font-black {{ bccomp($creditSummary['available_credit'], '0', 4) < 0 ? 'text-red-700' : 'text-emerald-700' }}">{{ $order->currency }} {{ number_format((float) $creditSummary['available_credit'], 2) }}</p></div>
+                                </div>
+                                <p class="mt-3 text-sm font-semibold {{ $creditSummary['profile_status']->allowsNewCredit() ? 'text-emerald-800' : 'text-red-700' }}">{{ $creditSummary['profile_status']->label() }}</p>
+                            @endif
+                            <form class="mt-4 space-y-3" method="POST" action="{{ route('orders.confirm', $order) }}" data-confirm="¿Confirmar el pedido? Después solo supervisión podrá reabrirlo.">
+                                @csrf
+                                @if($order->payment_term === \App\PaymentTerm::Credit && auth()->user()->canOverrideCustomerCredit())
+                                    <div><label class="form-label" for="credit_override_reason">Motivo de excepción crediticia <span class="font-normal">(solo si excede el límite)</span></label><textarea class="form-input min-h-20" id="credit_override_reason" name="credit_override_reason" maxlength="2000" placeholder="Justificación obligatoria si el pedido supera el disponible">{{ old('credit_override_reason') }}</textarea></div>
+                                @endif
+                                <button class="btn-primary" type="submit">Confirmar pedido</button>
+                            </form>
                         </div>
                     </section>
                 @endif

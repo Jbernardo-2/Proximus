@@ -49,7 +49,7 @@ class CatalogPanelTest extends TestCase
             ->assertSee('Productos');
     }
 
-    public function test_repartidor_is_forbidden_from_panel(): void
+    public function test_repartidor_is_forbidden_from_catalog(): void
     {
         $user = User::factory()->repartidor()->create();
 

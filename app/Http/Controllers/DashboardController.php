@@ -2,86 +2,123 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Brand;
-use App\Models\Category;
-use App\Models\Customer;
-use App\Models\InventoryStock;
-use App\Models\Order;
-use App\Models\Product;
-use App\Models\SalesRoute;
-use App\Models\Supplier;
+use App\DeliveryOrderStatus;
+use App\DeliveryRunStatus;
+use App\Models\DeliveryRun;
 use App\Models\User;
-use App\OrderStatus;
+use App\Services\DashboardService;
 use App\UserRole;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): View
+    public function __invoke(Request $request, DashboardService $dashboardService): View
     {
         /** @var User $user */
         $user = $request->user();
-        $metrics = [];
 
-        if ($user->canManageCustomers()) {
-            $metrics['customers'] = Customer::query()->count();
-            $metrics['active_customers'] = Customer::query()->active()->count();
-        }
-
-        if ($user->canViewRoutes()) {
-            $routeQuery = SalesRoute::query()
-                ->when($user->role === UserRole::Preventista, fn ($query) => $query->where('salesperson_id', $user->id));
-            $metrics['routes'] = (clone $routeQuery)->count();
-            $metrics['active_routes'] = (clone $routeQuery)->active()->count();
-        }
-
-        if ($user->canViewOrders()) {
-            $orderQuery = Order::query()->visibleTo($user);
-            $metrics['orders'] = (clone $orderQuery)->count();
-            $metrics['draft_orders'] = (clone $orderQuery)->where('status', OrderStatus::Draft->value)->count();
-            $metrics['confirmed_orders'] = (clone $orderQuery)->where('status', OrderStatus::Confirmed->value)->count();
-        }
-
-        if ($user->canViewInventory()) {
-            $metrics['inventory_products'] = InventoryStock::query()->count();
-            $metrics['inventory_shortages'] = InventoryStock::query()
-                ->whereColumn('quantity_on_hand', '<', 'quantity_reserved')
-                ->count();
-            $metrics['inventory_low'] = InventoryStock::query()
-                ->whereColumn('quantity_on_hand', '>=', 'quantity_reserved')
-                ->whereRaw('(quantity_on_hand - quantity_reserved) <= reorder_point')
-                ->count();
-        }
-
-        if ($user->canManageCatalog()) {
-            $metrics['products'] = Product::query()->count();
-            $metrics['active_products'] = Product::query()->active()->count();
-            $metrics['categories'] = Category::query()->count();
-            $metrics['brands'] = Brand::query()->count();
-            $metrics['suppliers'] = Supplier::query()->count();
-        }
-
-        return view('dashboard', [
-            'metrics' => $metrics,
-            'recentProducts' => $user->canManageCatalog() ? Product::query()
-                ->with(['category', 'basePresentation'])
-                ->latest()
-                ->orderByDesc('id')
-                ->limit(6)
-                ->get() : collect(),
-            'recentCustomers' => $user->canManageCustomers() ? Customer::query()
-                ->withCount(['routeStops' => fn ($query) => $query->visibleTo($user)])
-                ->latest()
-                ->orderByDesc('id')
-                ->limit(6)
-                ->get() : collect(),
-            'recentOrders' => $user->canViewOrders() ? Order::query()
-                ->visibleTo($user)
-                ->latest()
-                ->orderByDesc('id')
-                ->limit(6)
-                ->get() : collect(),
+        return view('dashboards.index', [
+            'driverDashboard' => $user->role === UserRole::Repartidor
+                ? $this->driverDashboard($user)
+                : null,
+            'managementDashboard' => in_array($user->role, [UserRole::Admin, UserRole::Supervisor], true)
+                ? $dashboardService->management()
+                : null,
+            'roleDashboard' => in_array($user->role, [UserRole::Bodeguero, UserRole::Preventista], true)
+                ? $dashboardService->forUser($user)
+                : null,
         ]);
+    }
+
+    /**
+     * @return array{
+     *     runs: Collection<int, DeliveryRun>,
+     *     currentRun: ?DeliveryRun,
+     *     nextStop: mixed,
+     *     metrics: array{stops: int, completed: int, pending: int, progress: int, delivered: string, collected: string, credit: string},
+     *     achievements: list<array{label: string, description: string, earned: bool}>
+     * }
+     */
+    private function driverDashboard(User $user): array
+    {
+        $completedStatuses = [
+            DeliveryOrderStatus::Delivered->value,
+            DeliveryOrderStatus::PartiallyDelivered->value,
+            DeliveryOrderStatus::NotDelivered->value,
+        ];
+        $openStatuses = collect(DeliveryRunStatus::cases())
+            ->filter(fn (DeliveryRunStatus $status): bool => $status->isOpen())
+            ->map->value
+            ->all();
+        $runs = DeliveryRun::query()
+            ->visibleTo($user)
+            ->where(function ($query) use ($openStatuses): void {
+                $query->whereIn('status', $openStatuses)
+                    ->orWhere(function ($today): void {
+                        $today->where('status', DeliveryRunStatus::Settled)
+                            ->whereDate('scheduled_date', today());
+                    });
+            })
+            ->withCount([
+                'runOrders as stops_count',
+                'runOrders as completed_stops_count' => fn ($query) => $query->whereIn('status', $completedStatuses),
+                'runOrders as delivered_stops_count' => fn ($query) => $query->where('status', DeliveryOrderStatus::Delivered),
+            ])
+            ->orderByRaw('case status when ? then 0 when ? then 1 when ? then 2 when ? then 3 else 4 end', [
+                DeliveryRunStatus::InTransit->value,
+                DeliveryRunStatus::Loaded->value,
+                DeliveryRunStatus::AwaitingSettlement->value,
+                DeliveryRunStatus::Preparing->value,
+            ])
+            ->orderByDesc('scheduled_date')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get();
+        $currentRun = $runs->first();
+        $nextStop = $currentRun?->runOrders()
+            ->whereNotIn('status', $completedStatuses)
+            ->with('order:id,order_number,customer_name,customer_address')
+            ->orderBy('visit_order')
+            ->orderBy('id')
+            ->first();
+        $stops = (int) $runs->sum('stops_count');
+        $completed = (int) $runs->sum('completed_stops_count');
+        $pending = max($stops - $completed, 0);
+        $delivered = $this->sumMoney($runs, 'delivered_total');
+        $collected = $this->sumMoney($runs, 'collected_total');
+        $credit = $this->sumMoney($runs, 'credit_total');
+        $progress = $stops > 0 ? (int) round(($completed / $stops) * 100) : 0;
+
+        return [
+            'runs' => $runs,
+            'currentRun' => $currentRun,
+            'nextStop' => $nextStop,
+            'metrics' => [
+                'stops' => $stops,
+                'completed' => $completed,
+                'pending' => $pending,
+                'progress' => $progress,
+                'delivered' => $delivered,
+                'collected' => $collected,
+                'credit' => $credit,
+            ],
+            'achievements' => [
+                ['label' => 'Primera entrega', 'description' => 'Completaste al menos una parada.', 'earned' => $completed >= 1],
+                ['label' => 'Mitad de la ruta', 'description' => 'Alcanzaste el 50% de las paradas.', 'earned' => $stops > 0 && $completed * 2 >= $stops],
+                ['label' => 'Cobranza al día', 'description' => 'No tienes saldo pendiente en las jornadas visibles.', 'earned' => $completed > 0 && bccomp($credit, '0', 4) === 0],
+                ['label' => 'Ruta completada', 'description' => 'Terminaste todas las paradas asignadas.', 'earned' => $stops > 0 && $pending === 0],
+            ],
+        ];
+    }
+
+    /** @param Collection<int, DeliveryRun> $runs */
+    private function sumMoney(Collection $runs, string $attribute): string
+    {
+        return $runs->reduce(
+            fn (string $total, DeliveryRun $run): string => bcadd($total, (string) $run->getAttribute($attribute), 4),
+            '0.0000',
+        );
     }
 }

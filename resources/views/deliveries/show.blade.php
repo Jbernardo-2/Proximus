@@ -9,7 +9,13 @@
 
 @section('content')
     @php
-        $quantity = static fn ($value): string => rtrim(rtrim((string) $value, '0'), '.') ?: '0';
+        $quantity = static function ($value): string {
+            $formatted = (string) $value;
+
+            return str_contains($formatted, '.')
+                ? (rtrim(rtrim($formatted, '0'), '.') ?: '0')
+                : $formatted;
+        };
         $currency = mb_strtoupper((string) config('proximus.currency', 'HNL'));
         $statusSteps = [
             \App\DeliveryRunStatus::Draft,
@@ -23,6 +29,11 @@
         $preparedOrdersCount = $deliveryRun->runOrders->where('status', \App\DeliveryOrderStatus::Prepared)->count();
         $pendingPreparationCount = $deliveryRun->runOrders->count() - $preparedOrdersCount;
         $allOrdersPrepared = $deliveryRun->runOrders->isNotEmpty() && $pendingPreparationCount === 0;
+        $completedStops = $deliveryRun->runOrders->filter(fn ($runOrder) => $runOrder->status->isCompleted());
+        $pendingStops = $deliveryRun->runOrders->reject(fn ($runOrder) => $runOrder->status->isCompleted());
+        $deliveryProgress = $deliveryRun->runOrders->isNotEmpty()
+            ? (int) round(($completedStops->count() / $deliveryRun->runOrders->count()) * 100)
+            : 0;
     @endphp
 
     <div class="space-y-6">
@@ -32,6 +43,27 @@
             <article class="card p-5"><p class="text-xs font-semibold tracking-wide text-ink-600 uppercase">Venta entregada</p><p class="mt-1 text-2xl font-black text-ink-950">{{ $currency }} {{ number_format((float) $deliveryRun->delivered_total, 2) }}</p><p class="text-xs text-ink-600">Cobrado {{ $currency }} {{ number_format((float) $deliveryRun->collected_total, 2) }}</p></article>
             <article class="card p-5"><p class="text-xs font-semibold tracking-wide text-ink-600 uppercase">Saldo pendiente</p><p class="mt-1 text-2xl font-black {{ bccomp($deliveryRun->credit_total, '0', 4) > 0 ? 'text-amber-700' : 'text-emerald-700' }}">{{ $currency }} {{ number_format((float) $deliveryRun->credit_total, 2) }}</p><p class="text-xs text-ink-600">Facturación interna, no fiscal</p></article>
         </section>
+
+        @if($reportRoutes->isNotEmpty())
+            <section class="card p-5">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="text-xs font-semibold tracking-[0.14em] text-leaf-700 uppercase">Documento operativo</p>
+                        <h2 class="mt-1 font-black text-ink-950">Consolidado y detalle por ruta</h2>
+                        <p class="text-sm text-ink-600">Úsalo para preparar la carga, revisar la siguiente ruta o supervisar la jornada.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach($reportRoutes as $reportRoute)
+                            <div class="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 p-2">
+                                <span class="px-2 text-sm font-bold text-ink-950">{{ $reportRoute->code }}</span>
+                                <a class="btn-secondary" target="_blank" rel="noopener" href="{{ route('route-reports.print', [$deliveryRun, $reportRoute]) }}">Imprimir</a>
+                                <a class="btn-primary" href="{{ route('route-reports.download', [$deliveryRun, $reportRoute]) }}">Descargar</a>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+        @endif
 
         @if($deliveryRun->status === \App\DeliveryRunStatus::Cancelled)
             <section class="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-950"><p class="font-bold">Jornada cancelada</p><p class="mt-1 whitespace-pre-line text-sm">{{ $deliveryRun->cancellation_reason }}</p></section>
@@ -127,69 +159,101 @@
                 @endif
 
                 @if(in_array($deliveryRun->status, [\App\DeliveryRunStatus::InTransit, \App\DeliveryRunStatus::AwaitingSettlement, \App\DeliveryRunStatus::Settled], true))
+                    <section class="card p-5 sm:p-6" id="delivery-progress">
+                        <div class="flex flex-wrap items-center justify-between gap-4"><div><p class="text-xs font-bold tracking-[0.14em] text-leaf-700 uppercase">Progreso de la ruta</p><h2 class="mt-1 text-xl font-black text-ink-950">{{ $completedStops->count() }} de {{ $deliveryRun->runOrders->count() }} paradas completadas</h2><p class="text-sm text-ink-600">Las entregas registradas salen de la cola activa y quedan disponibles en el historial.</p></div><div class="rounded-2xl bg-mint-100 px-5 py-3 text-center text-leaf-800"><p class="text-3xl font-black">{{ $deliveryProgress }}%</p><p class="text-xs font-bold uppercase">avance</p></div></div>
+                        <progress class="mt-4 h-3 w-full overflow-hidden rounded-full accent-leaf-600" value="{{ $completedStops->count() }}" max="{{ max($deliveryRun->runOrders->count(), 1) }}">{{ $deliveryProgress }}%</progress>
+                        <div class="mt-3 flex flex-wrap gap-4 text-sm"><span class="font-semibold text-emerald-700">{{ $completedStops->count() }} finalizadas</span><span class="font-semibold text-amber-700">{{ $pendingStops->count() }} pendientes</span><span class="font-semibold text-ink-700">Cobrado {{ $currency }} {{ number_format((float) $deliveryRun->collected_total, 2) }}</span></div>
+                    </section>
+
                     <section class="space-y-5">
-                        <div><p class="text-xs font-semibold tracking-[0.14em] text-leaf-700 uppercase">Paradas</p><h2 class="mt-1 text-xl font-black text-ink-950">Entregas y cobros</h2><p class="text-sm text-ink-600">Toda la carga debe terminar entregada, devuelta, dañada o faltante.</p></div>
-                        @foreach($deliveryRun->runOrders as $runOrder)
-                            <article class="card overflow-hidden" id="stop-{{ $runOrder->id }}">
+                        <div><p class="text-xs font-semibold tracking-[0.14em] text-leaf-700 uppercase">Cola activa</p><h2 class="mt-1 text-xl font-black text-ink-950">Próximas entregas</h2><p class="text-sm text-ink-600">Toda la carga debe terminar entregada, devuelta, dañada o faltante.</p></div>
+                        @forelse($pendingStops as $runOrder)
+                            <article class="card overflow-hidden" id="stop-{{ $runOrder->id }}" data-pending-stop="{{ $runOrder->id }}">
                                 <header class="flex flex-wrap items-start justify-between gap-4 border-b border-stone-100 px-5 py-4"><div><p class="text-xs font-bold text-leaf-700 uppercase">Parada #{{ $runOrder->visit_order }}</p><h3 class="mt-1 text-lg font-black text-ink-950">{{ $runOrder->order->customer_name }}</h3><p class="text-sm text-ink-600">{{ $runOrder->order->order_number }} · {{ $runOrder->order->route_name ?: 'Fuera de ruta' }} · {{ $runOrder->order->payment_term->label() }}</p></div><div class="text-right"><x-delivery-order-status-badge :status="$runOrder->status" /><p class="mt-2 text-sm font-black text-ink-950">{{ $currency }} {{ number_format((float) $runOrder->delivered_total, 2) }}</p></div></header>
 
-                                @if($canExecute)
+                                @if($runOrder->status === \App\DeliveryOrderStatus::AwaitingPayment)
+                                    @if($canExecute)
+                                        @include('deliveries.partials.settlement-form', compact('runOrder', 'deliveryRun', 'settlementMethods', 'currency', 'quantity'))
+                                    @else
+                                        <div class="rounded-xl bg-amber-50 p-5 text-sm font-semibold text-amber-900">El resultado está guardado y el repartidor debe registrar la distribución del pago para completar esta parada.</div>
+                                    @endif
+                                @elseif($canExecute)
                                     <form method="POST" action="{{ route('delivery-runs.orders.outcome', [$deliveryRun, $runOrder]) }}" class="space-y-5 p-5">
                                         @csrf @method('PUT')
                                         <div class="overflow-x-auto"><table class="w-full min-w-[900px]"><thead class="bg-stone-50"><tr><th class="table-heading">Producto</th><th class="table-heading text-right">Cargado</th><th class="table-heading">Entregado</th><th class="table-heading">Devuelto</th><th class="table-heading">Dañado</th><th class="table-heading">Faltante</th></tr></thead><tbody>
                                             @foreach($runOrder->items as $item)
                                                 @php($neverCompleted = $runOrder->completed_at === null)
-                                                <tr><td class="table-cell"><p class="font-semibold text-ink-950">{{ $item->product_name }}</p><p class="text-xs text-ink-600">{{ $item->presentation_name }} · {{ $currency }} {{ number_format((float) $item->unit_price, 2) }}</p><input type="hidden" name="items[{{ $item->id }}][id]" value="{{ $item->id }}"></td><td class="table-cell text-right font-black">{{ $quantity($item->loaded_quantity) }}</td><td class="table-cell"><input class="form-input min-h-9 w-28 py-1.5" aria-label="Entregado de {{ $item->product_name }}" name="items[{{ $item->id }}][delivered_quantity]" type="number" min="0" max="{{ $item->loaded_quantity }}" step="0.000001" required value="{{ old("items.{$item->id}.delivered_quantity", $neverCompleted ? $item->loaded_quantity : $item->delivered_quantity) }}"></td><td class="table-cell"><input class="form-input min-h-9 w-28 py-1.5" aria-label="Devuelto de {{ $item->product_name }}" name="items[{{ $item->id }}][returned_quantity]" type="number" min="0" max="{{ $item->loaded_quantity }}" step="0.000001" required value="{{ old("items.{$item->id}.returned_quantity", $item->returned_quantity) }}"></td><td class="table-cell"><input class="form-input min-h-9 w-28 py-1.5" aria-label="Dañado de {{ $item->product_name }}" name="items[{{ $item->id }}][damaged_quantity]" type="number" min="0" max="{{ $item->loaded_quantity }}" step="0.000001" required value="{{ old("items.{$item->id}.damaged_quantity", $item->damaged_quantity) }}"></td><td class="table-cell"><input class="form-input min-h-9 w-28 py-1.5" aria-label="Faltante de {{ $item->product_name }}" name="items[{{ $item->id }}][missing_quantity]" type="number" min="0" max="{{ $item->loaded_quantity }}" step="0.000001" required value="{{ old("items.{$item->id}.missing_quantity", $item->missing_quantity) }}"></td></tr>
+                                                @php($quantityStep = $item->presentation->is_base && $item->product->allows_decimal ? '0.000001' : '1')
+                                                <tr><td class="table-cell"><p class="font-semibold text-ink-950">{{ $item->product_name }}</p><p class="text-xs text-ink-600">{{ $item->presentation_name }} · {{ $currency }} {{ number_format((float) $item->unit_price, 2) }}</p><input type="hidden" name="items[{{ $item->id }}][id]" value="{{ $item->id }}"></td><td class="table-cell text-right font-black">{{ $quantity($item->loaded_quantity) }}</td><td class="table-cell"><input class="form-input min-h-9 w-28 py-1.5" aria-label="Entregado de {{ $item->product_name }}" name="items[{{ $item->id }}][delivered_quantity]" type="number" inputmode="decimal" min="0" max="{{ $quantity($item->loaded_quantity) }}" step="{{ $quantityStep }}" required value="{{ $quantity(old("items.{$item->id}.delivered_quantity", $neverCompleted ? $item->loaded_quantity : $item->delivered_quantity)) }}" data-delivery-quantity></td><td class="table-cell"><input class="form-input min-h-9 w-28 py-1.5" aria-label="Devuelto de {{ $item->product_name }}" name="items[{{ $item->id }}][returned_quantity]" type="number" inputmode="decimal" min="0" max="{{ $quantity($item->loaded_quantity) }}" step="{{ $quantityStep }}" required value="{{ $quantity(old("items.{$item->id}.returned_quantity", $item->returned_quantity)) }}" data-delivery-quantity></td><td class="table-cell"><input class="form-input min-h-9 w-28 py-1.5" aria-label="Dañado de {{ $item->product_name }}" name="items[{{ $item->id }}][damaged_quantity]" type="number" inputmode="decimal" min="0" max="{{ $quantity($item->loaded_quantity) }}" step="{{ $quantityStep }}" required value="{{ $quantity(old("items.{$item->id}.damaged_quantity", $item->damaged_quantity)) }}" data-delivery-quantity></td><td class="table-cell"><input class="form-input min-h-9 w-28 py-1.5" aria-label="Faltante de {{ $item->product_name }}" name="items[{{ $item->id }}][missing_quantity]" type="number" inputmode="decimal" min="0" max="{{ $quantity($item->loaded_quantity) }}" step="{{ $quantityStep }}" required value="{{ $quantity(old("items.{$item->id}.missing_quantity", $item->missing_quantity)) }}" data-delivery-quantity></td></tr>
                                             @endforeach
                                         </tbody></table></div>
                                         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                                             <div><label class="form-label" for="receiver-{{ $runOrder->id }}">Persona que recibió</label><input class="form-input" id="receiver-{{ $runOrder->id }}" name="receiver_name" maxlength="160" value="{{ old('receiver_name', $runOrder->receiver_name) }}" placeholder="Obligatorio si se entrega"></div>
                                             <div><label class="form-label" for="reason-{{ $runOrder->id }}">Motivo si no fue completa</label><select class="form-input" id="reason-{{ $runOrder->id }}" name="outcome_reason"><option value="">Entrega completa</option>@foreach($outcomeReasons as $reason)<option value="{{ $reason->value }}" @selected(old('outcome_reason', $runOrder->outcome_reason?->value) === $reason->value)>{{ $reason->label() }}</option>@endforeach</select></div>
-                                            <div><label class="form-label" for="credit-{{ $runOrder->id }}">Justificación de saldo</label><input class="form-input" id="credit-{{ $runOrder->id }}" name="credit_reason" maxlength="2000" value="{{ old('credit_reason', $runOrder->credit_reason) }}" placeholder="Si un pedido de contado queda pendiente"></div>
                                             <div class="sm:col-span-2"><label class="form-label" for="notes-{{ $runOrder->id }}">Observaciones</label><textarea class="form-input min-h-20" id="notes-{{ $runOrder->id }}" name="outcome_notes" maxlength="2000">{{ old('outcome_notes', $runOrder->outcome_notes) }}</textarea></div>
                                             <div class="grid grid-cols-2 gap-3"><div><label class="form-label" for="lat-{{ $runOrder->id }}">Latitud</label><input class="form-input" id="lat-{{ $runOrder->id }}" name="latitude" type="number" min="-90" max="90" step="0.0000001" value="{{ old('latitude', $runOrder->latitude) }}"></div><div><label class="form-label" for="lng-{{ $runOrder->id }}">Longitud</label><input class="form-input" id="lng-{{ $runOrder->id }}" name="longitude" type="number" min="-180" max="180" step="0.0000001" value="{{ old('longitude', $runOrder->longitude) }}"></div></div>
                                         </div>
-                                        <div class="flex justify-end"><button class="btn-primary" type="submit">Guardar resultado</button></div>
+                                        <div class="flex justify-end"><button class="btn-primary" type="submit">Guardar resultado y continuar al pago</button></div>
                                     </form>
                                 @else
                                     <div class="overflow-x-auto p-5"><table class="w-full min-w-[760px]"><thead class="bg-stone-50"><tr><th class="table-heading">Producto</th><th class="table-heading text-right">Cargado</th><th class="table-heading text-right">Entregado</th><th class="table-heading text-right">Devuelto</th><th class="table-heading text-right">Dañado</th><th class="table-heading text-right">Faltante</th></tr></thead><tbody>@foreach($runOrder->items as $item)<tr><td class="table-cell"><p class="font-semibold">{{ $item->product_name }}</p><p class="text-xs text-ink-600">{{ $item->presentation_name }}</p></td><td class="table-cell text-right">{{ $quantity($item->loaded_quantity) }}</td><td class="table-cell text-right font-bold text-emerald-700">{{ $quantity($item->delivered_quantity) }}</td><td class="table-cell text-right">{{ $quantity($item->returned_quantity) }}</td><td class="table-cell text-right text-red-700">{{ $quantity($item->damaged_quantity) }}</td><td class="table-cell text-right text-red-700">{{ $quantity($item->missing_quantity) }}</td></tr>@endforeach</tbody></table></div>
                                 @endif
 
-                                @if($runOrder->status->isCompleted())
-                                    <div class="border-t border-stone-100 bg-stone-50 p-5">
-                                        <div class="grid gap-4 sm:grid-cols-3"><div><p class="text-xs font-semibold text-ink-600 uppercase">Entregado</p><p class="mt-1 text-xl font-black">{{ $currency }} {{ number_format((float) $runOrder->delivered_total, 2) }}</p></div><div><p class="text-xs font-semibold text-ink-600 uppercase">Cobrado</p><p class="mt-1 text-xl font-black text-emerald-700">{{ $currency }} {{ number_format((float) $runOrder->collected_total, 2) }}</p></div><div><p class="text-xs font-semibold text-ink-600 uppercase">Saldo</p><p class="mt-1 text-xl font-black {{ bccomp($runOrder->balance_due, '0', 4) > 0 ? 'text-amber-700' : 'text-ink-950' }}">{{ $currency }} {{ number_format((float) $runOrder->balance_due, 2) }}</p></div></div>
-                                        @if($runOrder->outcome_reason)<p class="mt-3 text-sm text-ink-700"><strong>{{ $runOrder->outcome_reason->label() }}.</strong> {{ $runOrder->outcome_notes }}</p>@endif
-                                        <div class="mt-5 space-y-3">
-                                            @forelse($runOrder->payments as $payment)
-                                                <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white p-3"><div><p class="font-semibold text-ink-950">{{ $payment->receipt_number }} · {{ $payment->method->label() }}</p><p class="text-xs text-ink-600">{{ $payment->received_at->format('d/m/Y H:i') }} · {{ $payment->receivedBy->name }}@if($payment->reference) · Ref. {{ $payment->reference }}@endif</p>@if($payment->status === \App\DeliveryPaymentStatus::Voided)<p class="mt-1 text-xs font-bold text-red-700">Anulado: {{ $payment->void_reason }}</p>@endif</div><div class="flex items-center gap-3"><p class="font-black {{ $payment->status === \App\DeliveryPaymentStatus::Voided ? 'text-stone-400 line-through' : 'text-emerald-700' }}">{{ $currency }} {{ number_format((float) $payment->amount, 2) }}</p>@if($canVoidPayments && $payment->status === \App\DeliveryPaymentStatus::Active)<details><summary class="btn-danger min-h-8 cursor-pointer list-none px-3 py-1">Anular</summary><form method="POST" action="{{ route('delivery-runs.orders.payments.void', [$deliveryRun, $runOrder, $payment]) }}" class="mt-2 w-72 space-y-2 rounded-xl border border-red-200 bg-white p-3 shadow-lg">@csrf<label class="form-label" for="void-{{ $payment->id }}">Motivo *</label><textarea class="form-input min-h-20" id="void-{{ $payment->id }}" name="reason" required maxlength="1000"></textarea><button class="btn-danger w-full" type="submit">Confirmar anulación</button></form></details>@endif</div></div>
-                                            @empty
-                                                <p class="text-sm text-ink-600">Aún no hay cobros registrados.</p>
-                                            @endforelse
-                                        </div>
-                                        @if($canExecute && bccomp($runOrder->balance_due, '0', 4) > 0)
-                                            <form method="POST" action="{{ route('delivery-runs.orders.payments.store', [$deliveryRun, $runOrder]) }}" class="mt-5 grid gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 lg:grid-cols-[12rem_9rem_minmax(10rem,1fr)_auto]" data-payment-form>
-                                                @csrf
-                                                <div><label class="form-label" for="method-{{ $runOrder->id }}">Método *</label><select class="form-input" id="method-{{ $runOrder->id }}" name="method" required data-payment-method>@foreach($paymentMethods as $method)<option value="{{ $method->value }}" data-requires-reference="{{ $method->requiresReference() ? 'true' : 'false' }}">{{ $method->label() }}</option>@endforeach</select></div>
-                                                <div><label class="form-label" for="amount-{{ $runOrder->id }}">Monto *</label><input class="form-input" id="amount-{{ $runOrder->id }}" name="amount" type="number" min="0.0001" max="{{ $runOrder->balance_due }}" step="0.0001" required value="{{ $runOrder->balance_due }}"></div>
-                                                <div><label class="form-label" for="reference-{{ $runOrder->id }}">Referencia <span data-reference-required-label></span></label><input class="form-input" id="reference-{{ $runOrder->id }}" name="reference" maxlength="120" placeholder="Número de transferencia, cheque o autorización" data-payment-reference></div>
-                                                <div class="flex items-end"><button class="btn-primary w-full" type="submit">Registrar cobro</button></div>
-                                            </form>
-                                        @endif
-                                        @if($deliveryRun->status === \App\DeliveryRunStatus::Settled && $runOrder->status === \App\DeliveryOrderStatus::NotDelivered && auth()->user()->canManageOrderLifecycle())
-                                            <form method="POST" action="{{ route('delivery-runs.orders.requeue', [$deliveryRun, $runOrder]) }}" class="mt-5 flex flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 sm:flex-row sm:items-end">@csrf<div class="flex-1"><label class="form-label" for="requeue-{{ $runOrder->id }}">Motivo para reprogramar *</label><input class="form-input" id="requeue-{{ $runOrder->id }}" name="reason" required maxlength="1000" placeholder="Nueva fecha acordada, cliente solicitó reintento…"></div><button class="btn-secondary" type="submit">Reprogramar pedido</button></form>
-                                        @endif
-                                    </div>
-                                @endif
                             </article>
-                        @endforeach
+                        @empty
+                            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-6"><h3 class="text-lg font-black text-emerald-950">Todas las paradas están registradas</h3><p class="mt-1 text-sm text-emerald-800">La jornada ya está lista para revisar cobros y liquidación.</p></div>
+                        @endforelse
                     </section>
+
+                    @if($completedStops->isNotEmpty())
+                        <section class="card overflow-hidden" id="completed-stops">
+                            <header class="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-5 py-4"><div><p class="text-xs font-bold tracking-[0.14em] text-emerald-700 uppercase">Historial</p><h2 class="mt-1 text-xl font-black text-ink-950">Entregas registradas</h2><p class="text-sm text-ink-600">Abre una parada para revisar el resultado y la distribución con la que fue cerrada.</p></div><span class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-black text-emerald-800">{{ $completedStops->count() }}</span></header>
+                            <div class="divide-y divide-stone-100">
+                                @foreach($completedStops as $runOrder)
+                                    <details class="group" data-completed-stop="{{ $runOrder->id }}">
+                                        <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-4 p-5 transition hover:bg-stone-50"><div><p class="text-xs font-bold text-emerald-700 uppercase">Parada #{{ $runOrder->visit_order }}</p><h3 class="font-black text-ink-950">{{ $runOrder->order->customer_name }}</h3><p class="text-sm text-ink-600">{{ $runOrder->order->order_number }} · {{ $runOrder->order->route_name ?: 'Fuera de ruta' }}</p></div><div class="flex items-center gap-4"><div class="text-right"><x-delivery-order-status-badge :status="$runOrder->status" /><p class="mt-1 text-sm font-black text-ink-950">Saldo {{ $currency }} {{ number_format((float) $runOrder->balance_due, 2) }}</p></div><span class="text-xl text-ink-500 transition group-open:rotate-180">⌄</span></div></summary>
+                                        <div class="border-t border-stone-100 bg-stone-50 p-5">
+                                            <div class="grid gap-4 sm:grid-cols-3"><div><p class="text-xs font-semibold text-ink-600 uppercase">Entregado</p><p class="mt-1 text-xl font-black">{{ $currency }} {{ number_format((float) $runOrder->delivered_total, 2) }}</p></div><div><p class="text-xs font-semibold text-ink-600 uppercase">Cobrado</p><p class="mt-1 text-xl font-black text-emerald-700">{{ $currency }} {{ number_format((float) $runOrder->collected_total, 2) }}</p></div><div><p class="text-xs font-semibold text-ink-600 uppercase">Saldo</p><p class="mt-1 text-xl font-black {{ bccomp($runOrder->balance_due, '0', 4) > 0 ? 'text-amber-700' : 'text-ink-950' }}">{{ $currency }} {{ number_format((float) $runOrder->balance_due, 2) }}</p></div></div>
+                                            <div class="mt-5 space-y-3">
+                                                @forelse($runOrder->payments as $payment)
+                                                    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white p-3"><div><p class="font-semibold text-ink-950">{{ $payment->receipt_number }} · {{ $payment->method->label() }}</p><p class="text-xs text-ink-600">{{ $payment->received_at->format('d/m/Y H:i') }} · {{ $payment->receivedBy->name }}@if($payment->reference) · Ref. {{ $payment->reference }}@endif</p>@if($payment->status === \App\DeliveryPaymentStatus::Voided)<p class="mt-1 text-xs font-bold text-red-700">Anulado: {{ $payment->void_reason }}</p>@endif</div><div class="flex items-center gap-3"><p class="font-black {{ $payment->status === \App\DeliveryPaymentStatus::Voided ? 'text-stone-400 line-through' : 'text-emerald-700' }}">{{ $currency }} {{ number_format((float) $payment->amount, 2) }}</p>@if($canVoidPayments && $runOrder->settlement === null && $payment->status === \App\DeliveryPaymentStatus::Active)<details><summary class="btn-danger min-h-8 cursor-pointer list-none px-3 py-1">Anular</summary><form method="POST" action="{{ route('delivery-runs.orders.payments.void', [$deliveryRun, $runOrder, $payment]) }}" class="mt-2 w-72 space-y-2 rounded-xl border border-red-200 bg-white p-3 shadow-lg">@csrf<label class="form-label" for="void-history-{{ $payment->id }}">Motivo *</label><textarea class="form-input min-h-20" id="void-history-{{ $payment->id }}" name="reason" required maxlength="1000"></textarea><button class="btn-danger w-full" type="submit">Confirmar anulación</button></form></details>@endif</div></div>
+                                                @empty
+                                                    <p class="text-sm text-ink-600">Aún no hay cobros registrados.</p>
+                                                @endforelse
+                                                @foreach($runOrder->settlement?->lines?->where('method', \App\SettlementMethod::Credit) ?? collect() as $creditLine)
+                                                    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3"><div><p class="font-semibold text-amber-950">Crédito generado</p><p class="text-xs text-amber-800">{{ $runOrder->credit_reason }} · visible en la cuenta del cliente</p></div><p class="font-black text-amber-900">{{ $currency }} {{ number_format((float) $creditLine->amount, 2) }}</p></div>
+                                                @endforeach
+                                            </div>
+
+                                            @if($runOrder->settlement)
+                                                <div class="mt-5 flex flex-wrap items-center gap-2"><span class="mr-1 text-sm font-bold text-ink-950">Factura {{ $runOrder->settlement->invoice_number ?: $runOrder->order->order_number }}</span><a class="btn-secondary" target="_blank" rel="noopener" href="{{ route('delivery-runs.orders.invoice.show', [$deliveryRun, $runOrder]) }}">Tamaño carta</a><a class="btn-secondary" target="_blank" rel="noopener" href="{{ route('delivery-runs.orders.invoice.show', [$deliveryRun, $runOrder, 'format' => 'ticket']) }}">Ticket 80 mm</a></div>
+                                            @endif
+
+                                            @if($deliveryRun->status === \App\DeliveryRunStatus::Settled && $runOrder->status === \App\DeliveryOrderStatus::NotDelivered && auth()->user()->canManageOrderLifecycle())
+                                                <form method="POST" action="{{ route('delivery-runs.orders.requeue', [$deliveryRun, $runOrder]) }}" class="mt-5 flex flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 sm:flex-row sm:items-end">@csrf<div class="flex-1"><label class="form-label" for="requeue-history-{{ $runOrder->id }}">Motivo para reprogramar *</label><input class="form-input" id="requeue-history-{{ $runOrder->id }}" name="reason" required maxlength="1000" placeholder="Nueva fecha acordada, cliente solicitó reintento…"></div><button class="btn-secondary" type="submit">Reprogramar pedido</button></form>
+                                            @endif
+                                        </div>
+                                    </details>
+                                @endforeach
+                            </div>
+                        </section>
+                    @endif
                 @endif
 
                 @if($canSettle)
                     <section class="card p-5 sm:p-7">
                         <div class="mb-5"><p class="text-xs font-semibold tracking-[0.14em] text-violet-700 uppercase">Cierre de jornada</p><h2 class="mt-1 text-xl font-black text-ink-950">Liquidación de ruta</h2><p class="text-sm text-ink-600">Al cerrar se reingresan las devoluciones a bodega y el resultado se vuelve inmutable.</p></div>
                         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-semibold text-ink-600 uppercase">Efectivo esperado</p><p class="mt-1 text-xl font-black">{{ $currency }} {{ number_format((float) $deliveryRun->cash_expected, 2) }}</p></div><div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-semibold text-ink-600 uppercase">Transferencias</p><p class="mt-1 text-xl font-black">{{ $currency }} {{ number_format((float) $deliveryRun->transfer_total, 2) }}</p></div><div class="rounded-xl bg-stone-50 p-4"><p class="text-xs font-semibold text-ink-600 uppercase">Otros cobros</p><p class="mt-1 text-xl font-black">{{ $currency }} {{ number_format((float) bcadd(bcadd($deliveryRun->card_total, $deliveryRun->check_total, 4), $deliveryRun->other_payment_total, 4), 2) }}</p></div><div class="rounded-xl bg-amber-50 p-4"><p class="text-xs font-semibold text-amber-800 uppercase">Crédito / saldo</p><p class="mt-1 text-xl font-black text-amber-900">{{ $currency }} {{ number_format((float) $deliveryRun->credit_total, 2) }}</p></div></div>
-                        <form method="POST" action="{{ route('delivery-runs.settle', $deliveryRun) }}" class="mt-6 space-y-4" data-confirm="¿Liquidar definitivamente la jornada? Los resultados ya no podrán editarse.">@csrf<div><label class="form-label" for="cash_declared">Efectivo entregado por el repartidor *</label><input class="form-input max-w-xs" id="cash_declared" name="cash_declared" type="number" min="0" step="0.0001" required value="{{ old('cash_declared', $deliveryRun->cash_expected) }}"></div><div><label class="form-label" for="settlement_notes">Observaciones de liquidación</label><textarea class="form-input min-h-24" id="settlement_notes" name="settlement_notes" maxlength="3000" placeholder="Obligatorio cuando exista una diferencia de efectivo">{{ old('settlement_notes') }}</textarea></div><div class="flex justify-end"><button class="btn-primary" type="submit">Liquidar jornada</button></div></form>
+                        <form method="POST" action="{{ route('delivery-runs.settle', $deliveryRun) }}" class="mt-6 space-y-4" data-confirm="¿Liquidar definitivamente la jornada? Los resultados ya no podrán editarse.">@csrf<div><label class="form-label" for="cash_declared">Efectivo entregado por el repartidor *</label><input class="form-input max-w-xs" id="cash_declared" name="cash_declared" type="number" min="0" step="0.0001" required value="{{ old('cash_declared', $deliveryRun->cash_expected) }}"></div>
+                            @if($cashOrdersNeedingCreditReason->isNotEmpty())
+                                <div class="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                                    <div><h3 class="font-bold text-amber-950">Justifica los saldos pendientes</h3><p class="text-sm text-amber-900">Estos pedidos se registraron de contado y todavía tienen un saldo. Escribe el acuerdo antes de liquidar.</p></div>
+                                    @foreach($cashOrdersNeedingCreditReason as $creditRunOrder)
+                                        <div><label class="form-label" for="credit-reason-{{ $creditRunOrder->id }}">{{ $creditRunOrder->order->order_number }} · {{ $creditRunOrder->order->customer_name }} — saldo {{ $currency }} {{ number_format((float) $creditRunOrder->balance_due, 2) }} *</label><textarea class="form-input min-h-20" id="credit-reason-{{ $creditRunOrder->id }}" name="credit_reasons[{{ $creditRunOrder->id }}]" maxlength="2000" required placeholder="Ejemplo: cliente pagará el saldo en su próxima visita">{{ old("credit_reasons.{$creditRunOrder->id}", $creditRunOrder->credit_reason) }}</textarea></div>
+                                    @endforeach
+                                </div>
+                            @endif
+                            <div><label class="form-label" for="settlement_notes">Observaciones de liquidación</label><textarea class="form-input min-h-24" id="settlement_notes" name="settlement_notes" maxlength="3000" placeholder="Obligatorio cuando exista una diferencia de efectivo">{{ old('settlement_notes') }}</textarea></div><div class="flex justify-end"><button class="btn-primary" type="submit">Liquidar jornada</button></div></form>
                     </section>
                 @endif
 
@@ -209,4 +273,8 @@
             </aside>
         </div>
     </div>
+
+    @if($invoiceDialog)
+        @include('deliveries.partials.invoice-dialog', compact('invoiceDialog'))
+    @endif
 @endsection

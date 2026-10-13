@@ -4,7 +4,6 @@ namespace App\Actions;
 
 use App\DeliveryOrderStatus;
 use App\DeliveryOutcomeReason;
-use App\DeliveryPaymentStatus;
 use App\DeliveryRunStatus;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunItem;
@@ -12,12 +11,16 @@ use App\Models\DeliveryRunOrder;
 use App\Models\Order;
 use App\Models\User;
 use App\OrderStatus;
+use App\Services\OperationalNotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CompleteDeliveryStopAction
 {
-    public function __construct(private RefreshDeliveryFinancialsAction $refreshFinancials) {}
+    public function __construct(
+        private RefreshDeliveryFinancialsAction $refreshFinancials,
+        private OperationalNotificationService $notifications,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -30,7 +33,7 @@ class CompleteDeliveryStopAction
         array $items,
         User $actor,
     ): DeliveryRunOrder {
-        return DB::transaction(function () use ($deliveryRun, $runOrder, $data, $items, $actor): DeliveryRunOrder {
+        $completedRunOrder = DB::transaction(function () use ($deliveryRun, $runOrder, $data, $items, $actor): DeliveryRunOrder {
             $run = DeliveryRun::query()->lockForUpdate()->findOrFail($deliveryRun->id);
 
             if (! in_array($run->status, [DeliveryRunStatus::InTransit, DeliveryRunStatus::AwaitingSettlement], true)) {
@@ -40,6 +43,12 @@ class CompleteDeliveryStopAction
             }
 
             $lockedRunOrder = $run->runOrders()->with('order')->lockForUpdate()->findOrFail($runOrder->id);
+
+            if ($lockedRunOrder->status !== DeliveryOrderStatus::Loaded) {
+                throw ValidationException::withMessages([
+                    'delivery_run_order' => ['Esta parada ya tiene un resultado guardado.'],
+                ]);
+            }
             $runItems = DeliveryRunItem::query()
                 ->with(['product', 'presentation'])
                 ->where('delivery_run_order_id', $lockedRunOrder->id)
@@ -107,12 +116,12 @@ class CompleteDeliveryStopAction
                     && bccomp($delivered, (string) $item->requested_quantity, 6) === 0;
             }
 
-            $status = $allRequestedDelivered
+            $outcomeStatus = $allRequestedDelivered
                 ? DeliveryOrderStatus::Delivered
                 : ($anyDelivered ? DeliveryOrderStatus::PartiallyDelivered : DeliveryOrderStatus::NotDelivered);
             $reason = DeliveryOutcomeReason::tryFrom((string) ($data['outcome_reason'] ?? ''));
 
-            if ($status === DeliveryOrderStatus::Delivered) {
+            if ($outcomeStatus === DeliveryOrderStatus::Delivered) {
                 $reason = null;
             } elseif ($reason === null) {
                 throw ValidationException::withMessages([
@@ -126,31 +135,34 @@ class CompleteDeliveryStopAction
                 ]);
             }
 
-            $activePayments = $lockedRunOrder->payments()
-                ->where('status', DeliveryPaymentStatus::Active->value)
-                ->sum('amount');
-
-            if (bccomp((string) $activePayments, $deliveredTotal, 4) > 0) {
-                throw ValidationException::withMessages([
-                    'items' => ['No puedes reducir lo entregado por debajo de los cobros ya registrados.'],
-                ]);
-            }
+            $requiresSettlement = bccomp($deliveredTotal, '0', 4) > 0;
+            $recordedAt = now();
 
             $lockedRunOrder->forceFill([
-                'status' => $status,
+                'status' => $requiresSettlement ? DeliveryOrderStatus::AwaitingPayment : $outcomeStatus,
+                'outcome_status' => $outcomeStatus,
                 'delivered_total' => $deliveredTotal,
-                'balance_due' => bcsub($deliveredTotal, (string) $activePayments, 4),
+                'collected_total' => '0.0000',
+                'balance_due' => $deliveredTotal,
                 'outcome_reason' => $reason,
                 'outcome_notes' => $data['outcome_notes'] ?? null,
-                'credit_reason' => $data['credit_reason'] ?? null,
+                'outcome_recorded_at' => $recordedAt,
+                'outcome_recorded_by' => $actor->id,
+                'credit_reason' => null,
                 'receiver_name' => $data['receiver_name'] ?? null,
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
-                'completed_at' => now(),
-                'completed_by' => $actor->id,
+                'completed_at' => $requiresSettlement ? null : $recordedAt,
+                'completed_by' => $requiresSettlement ? null : $actor->id,
             ])->save();
 
-            $orderStatus = match ($status) {
+            if ($requiresSettlement) {
+                $this->refreshFinancials->handle($run);
+
+                return $lockedRunOrder->refresh();
+            }
+
+            $orderStatus = match ($outcomeStatus) {
                 DeliveryOrderStatus::Delivered => OrderStatus::Delivered,
                 DeliveryOrderStatus::PartiallyDelivered => OrderStatus::PartiallyDelivered,
                 DeliveryOrderStatus::NotDelivered => OrderStatus::NotDelivered,
@@ -165,7 +177,7 @@ class CompleteDeliveryStopAction
                     'from_status' => $previousStatus,
                     'to_status' => $orderStatus,
                     'changed_by' => $actor->id,
-                    'reason' => $status->label()." en la jornada {$run->run_number}.".($reason ? ' '.$reason->label().'.' : ''),
+                    'reason' => $outcomeStatus->label()." en la jornada {$run->run_number}.".($reason ? ' '.$reason->label().'.' : ''),
                 ]);
             }
 
@@ -191,5 +203,9 @@ class CompleteDeliveryStopAction
 
             return $lockedRunOrder->refresh();
         });
+
+        $this->notifications->deliveryOutcomeRecorded($completedRunOrder);
+
+        return $completedRunOrder;
     }
 }

@@ -9,14 +9,25 @@ use Tests\TestCase;
 
 class OperationsAccessTest extends TestCase
 {
+    public static function companyProfileRoles(): array
+    {
+        return [
+            'admin' => [UserRole::Admin, true],
+            'supervisor' => [UserRole::Supervisor, false],
+            'preventista' => [UserRole::Preventista, false],
+            'bodeguero' => [UserRole::Bodeguero, false],
+            'repartidor' => [UserRole::Repartidor, false],
+        ];
+    }
+
     public static function roles(): array
     {
         return [
-            'admin' => [UserRole::Admin, true, true, true, true, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage', 'users:manage']],
-            'supervisor' => [UserRole::Supervisor, true, true, true, true, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage']],
-            'preventista' => [UserRole::Preventista, true, true, true, false, true, true, false, false, true, false, false, false, ['customers:manage', 'routes:view', 'orders:view', 'orders:manage', 'inventory:view']],
-            'bodeguero' => [UserRole::Bodeguero, true, false, false, false, true, false, false, false, true, true, false, false, ['catalog:manage', 'orders:view', 'inventory:view', 'inventory:operate', 'deliveries:view', 'deliveries:prepare']],
-            'repartidor' => [UserRole::Repartidor, false, false, false, false, false, false, false, false, false, false, false, false, ['deliveries:view', 'deliveries:execute']],
+            'admin' => [UserRole::Admin, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'credits:view', 'credits:configure', 'payments:record', 'payments:reverse', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage', 'users:manage']],
+            'supervisor' => [UserRole::Supervisor, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, ['catalog:manage', 'customers:manage', 'credits:view', 'credits:configure', 'payments:record', 'payments:reverse', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage']],
+            'preventista' => [UserRole::Preventista, true, true, true, false, false, false, false, true, false, true, true, false, false, true, false, false, false, ['customers:manage', 'credits:view', 'routes:view', 'orders:view', 'orders:manage', 'inventory:view']],
+            'bodeguero' => [UserRole::Bodeguero, true, false, false, false, false, false, false, false, false, true, false, false, false, true, true, false, false, ['catalog:manage', 'orders:view', 'inventory:view', 'inventory:operate', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare']],
+            'repartidor' => [UserRole::Repartidor, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, ['deliveries:view', 'deliveries:execute']],
         ];
     }
 
@@ -26,6 +37,11 @@ class OperationsAccessTest extends TestCase
         UserRole $role,
         bool $canAccessPanel,
         bool $canManageCustomers,
+        bool $canViewCustomerCredit,
+        bool $canConfigureCustomerCredit,
+        bool $canRecordCustomerPayments,
+        bool $canReverseCustomerPayments,
+        bool $canOverrideCustomerCredit,
         bool $canViewRoutes,
         bool $canManageRoutes,
         bool $canViewOrders,
@@ -45,6 +61,11 @@ class OperationsAccessTest extends TestCase
 
         $this->assertSame($canAccessPanel, $user->canAccessPanel());
         $this->assertSame($canManageCustomers, $user->canManageCustomers());
+        $this->assertSame($canViewCustomerCredit, $user->canViewCustomerCredit());
+        $this->assertSame($canConfigureCustomerCredit, $user->canConfigureCustomerCredit());
+        $this->assertSame($canRecordCustomerPayments, $user->canRecordCustomerPayments());
+        $this->assertSame($canReverseCustomerPayments, $user->canReverseCustomerPayments());
+        $this->assertSame($canOverrideCustomerCredit, $user->canOverrideCustomerCredit());
         $this->assertSame($canViewRoutes, $user->canViewRoutes());
         $this->assertSame($canManageRoutes, $user->canManageRoutes());
         $this->assertSame($canViewOrders, $user->canViewOrders());
@@ -64,6 +85,11 @@ class OperationsAccessTest extends TestCase
 
         $this->assertFalse($user->canAccessPanel());
         $this->assertFalse($user->canManageCustomers());
+        $this->assertFalse($user->canViewCustomerCredit());
+        $this->assertFalse($user->canConfigureCustomerCredit());
+        $this->assertFalse($user->canRecordCustomerPayments());
+        $this->assertFalse($user->canReverseCustomerPayments());
+        $this->assertFalse($user->canOverrideCustomerCredit());
         $this->assertFalse($user->canViewRoutes());
         $this->assertFalse($user->canManageRoutes());
         $this->assertFalse($user->canViewOrders());
@@ -74,6 +100,31 @@ class OperationsAccessTest extends TestCase
         $this->assertFalse($user->canOperateInventory());
         $this->assertFalse($user->canAdjustInventory());
         $this->assertFalse($user->canConfigureInventory());
+        $this->assertFalse($user->canViewRouteReports());
+        $this->assertFalse($user->canManageCompanyProfile());
         $this->assertSame([], $user->apiAbilities());
+    }
+
+    public function test_every_active_operational_role_can_view_route_reports(): void
+    {
+        foreach (UserRole::cases() as $role) {
+            $user = User::factory()->make([
+                'role' => $role,
+                'is_active' => true,
+            ]);
+
+            $this->assertTrue($user->canViewRouteReports(), $role->value);
+        }
+    }
+
+    #[DataProvider('companyProfileRoles')]
+    public function test_only_administrator_can_manage_company_profile(UserRole $role, bool $expected): void
+    {
+        $user = User::factory()->make([
+            'role' => $role,
+            'is_active' => true,
+        ]);
+
+        $this->assertSame($expected, $user->canManageCompanyProfile());
     }
 }

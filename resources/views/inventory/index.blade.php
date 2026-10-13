@@ -42,17 +42,44 @@
             @else
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[900px]">
-                        <thead class="bg-stone-50"><tr><th class="table-heading">Producto</th><th class="table-heading text-right">Físico</th><th class="table-heading text-right">Comprometido</th><th class="table-heading text-right">Disponible</th><th class="table-heading">Estado</th>@can('configure-inventory')<th class="table-heading">Reposición</th>@endcan</tr></thead>
+                        <thead class="bg-stone-50"><tr><th class="table-heading">Producto</th><th class="table-heading text-right">Físico</th><th class="table-heading text-right">Comprometido</th><th class="table-heading text-right">Disponible</th><th class="table-heading">Estado</th>@can('configure-inventory')<th class="table-heading">Punto mínimo</th>@endcan @can('operate-inventory')<th class="table-heading">Entrada rápida</th>@endcan</tr></thead>
                         <tbody>
                             @foreach($stocks as $stock)
-                                @php($available = $stock->availableQuantity())
+                                @php
+                                    $available = $stock->availableQuantity();
+                                    $allowsDecimal = $stock->product->allows_decimal;
+                                    $quantityStep = $allowsDecimal ? '0.000001' : '1';
+                                    $formattedReorderPoint = rtrim(rtrim($stock->reorder_point, '0'), '.');
+                                @endphp
                                 <tr>
                                     <td class="table-cell"><p class="font-semibold text-ink-950">{{ $stock->product->name }}</p><p class="text-xs text-ink-600">{{ $stock->product->sku }} · {{ $stock->product->baseUnit->symbol }}</p></td>
                                     <td class="table-cell text-right font-semibold">{{ rtrim(rtrim($stock->quantity_on_hand, '0'), '.') }}</td>
                                     <td class="table-cell text-right font-semibold">{{ rtrim(rtrim($stock->quantity_reserved, '0'), '.') }}</td>
                                     <td class="table-cell text-right text-lg font-black {{ bccomp($available, '0', 6) < 0 ? 'text-red-700' : 'text-ink-950' }}">{{ rtrim(rtrim($available, '0'), '.') }}</td>
                                     <td class="table-cell">@if(bccomp($available, '0', 6) < 0)<span class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">Faltan {{ rtrim(rtrim($stock->shortageQuantity(), '0'), '.') }}</span>@elseif($stock->isLowStock())<span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">Reponer</span>@else<span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">Disponible</span>@endif</td>
-                                    @can('configure-inventory')<td class="table-cell"><form method="POST" action="{{ route('inventory-stocks.update', $stock) }}" class="flex items-center gap-2">@csrf @method('PUT')<input class="form-input min-h-9 w-28 py-1.5" name="reorder_point" type="number" min="0" step="0.000001" value="{{ $stock->reorder_point }}" aria-label="Punto de reposición de {{ $stock->product->name }}"><button class="btn-secondary min-h-9 px-3 py-1">Guardar</button></form></td>@endcan
+                                    @can('configure-inventory')
+                                        <td class="table-cell">
+                                            <form method="POST" action="{{ route('inventory-stocks.update', $stock) }}" class="flex items-center gap-2">
+                                                @csrf
+                                                @method('PUT')
+                                                <input class="form-input min-h-9 w-24 py-1.5" name="reorder_point" type="number" min="0" step="{{ $quantityStep }}" value="{{ $formattedReorderPoint }}" inputmode="{{ $allowsDecimal ? 'decimal' : 'numeric' }}" aria-label="Punto mínimo de {{ $stock->product->name }}">
+                                                <button class="btn-secondary min-h-9 px-3 py-1">Guardar</button>
+                                            </form>
+                                        </td>
+                                    @endcan
+                                    @can('operate-inventory')
+                                        <td class="table-cell">
+                                            @if($stock->product->tracks_lots || $stock->product->tracks_expiration)
+                                                <a class="text-sm font-semibold text-leaf-700" href="{{ route('inventory-documents.create') }}">Entrada detallada</a>
+                                            @else
+                                                <form method="POST" action="{{ route('inventory-stocks.replenishments.store', $stock) }}" class="flex items-center gap-2">
+                                                    @csrf
+                                                    <input class="form-input min-h-9 w-24 py-1.5" name="quantity" type="number" min="{{ $quantityStep }}" step="{{ $quantityStep }}" value="" placeholder="0" inputmode="{{ $allowsDecimal ? 'decimal' : 'numeric' }}" autocomplete="off" required aria-label="Cantidad a agregar de {{ $stock->product->name }}">
+                                                    <button class="btn-primary min-h-9 px-3 py-1">Agregar</button>
+                                                </form>
+                                            @endif
+                                        </td>
+                                    @endcan
                                 </tr>
                             @endforeach
                         </tbody>

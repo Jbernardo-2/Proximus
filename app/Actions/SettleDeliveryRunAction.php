@@ -39,13 +39,23 @@ class SettleDeliveryRunAction
                 ]);
             }
 
+            $creditReasonsToSave = [];
+
             foreach ($runOrders as $runOrder) {
                 if ($runOrder->order->payment_term === PaymentTerm::Cash
-                    && bccomp((string) $runOrder->balance_due, '0', 4) > 0
-                    && blank($runOrder->credit_reason)) {
-                    throw ValidationException::withMessages([
-                        'credit' => ["El pedido {$runOrder->order->order_number} era de contado y quedó con saldo; registra una justificación de crédito."],
-                    ]);
+                    && bccomp((string) $runOrder->balance_due, '0', 4) > 0) {
+                    $creditReason = $runOrder->credit_reason
+                        ?? ($data['credit_reasons'][$runOrder->id] ?? null);
+
+                    if (blank($creditReason)) {
+                        throw ValidationException::withMessages([
+                            "credit_reasons.{$runOrder->id}" => ["Indica por qué se autorizó el saldo pendiente del pedido {$runOrder->order->order_number}."],
+                        ]);
+                    }
+
+                    if (blank($runOrder->credit_reason)) {
+                        $creditReasonsToSave[$runOrder->id] = $creditReason;
+                    }
                 }
             }
 
@@ -105,6 +115,12 @@ class SettleDeliveryRunAction
                 throw ValidationException::withMessages([
                     'settlement_notes' => ['Explica la diferencia entre el efectivo esperado y el declarado.'],
                 ]);
+            }
+
+            foreach ($creditReasonsToSave as $runOrderId => $creditReason) {
+                $runOrders->firstWhere('id', $runOrderId)
+                    ->forceFill(['credit_reason' => $creditReason])
+                    ->save();
             }
 
             $run->forceFill([

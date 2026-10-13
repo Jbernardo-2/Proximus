@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\DeliveryRunStatus;
 use App\Models\DeliveryRun;
+use App\Models\SalesRoute;
 use App\Models\User;
 use App\UserRole;
 
@@ -32,6 +33,27 @@ class DeliveryRunPolicy
     public function create(User $user): bool
     {
         return $user->canManageDeliveries();
+    }
+
+    public function viewRouteReport(User $user, DeliveryRun $deliveryRun, SalesRoute $salesRoute): bool
+    {
+        if (! $user->canViewRouteReports()) {
+            return false;
+        }
+
+        $runContainsRoute = $deliveryRun->runOrders()
+            ->whereHas('order', fn ($orders) => $orders->where('sales_route_id', $salesRoute->id))
+            ->exists();
+
+        if (! $runContainsRoute) {
+            return false;
+        }
+
+        return match ($user->role) {
+            UserRole::Admin, UserRole::Supervisor, UserRole::Bodeguero => true,
+            UserRole::Repartidor => $deliveryRun->driver_id === $user->id,
+            UserRole::Preventista => $salesRoute->salesperson_id === $user->id,
+        };
     }
 
     public function update(User $user, DeliveryRun $deliveryRun): bool

@@ -58,7 +58,9 @@ class ProductManagementTest extends TestCase
         ]);
 
         $product = Product::query()->where('sku', 'ACE-001')->firstOrFail();
-        $response->assertRedirect(route('products.show', $product));
+        $response
+            ->assertRedirectToRoute('products.index')
+            ->assertSessionHas('success', 'Producto guardado correctamente.');
         $this->assertDatabaseHas('product_presentations', [
             'product_id' => $product->id,
             'name' => 'Botella',
@@ -71,6 +73,18 @@ class ProductManagementTest extends TestCase
         $this->assertSame(1200, $storedImageSize[0]);
         $this->assertSame(1200, $storedImageSize[1]);
         $this->assertSame('image/jpeg', $storedImageSize['mime']);
+
+        $this->get(route('products.index'))
+            ->assertOk()
+            ->assertSee('Producto guardado correctamente.')
+            ->assertSee('Aceite vegetal')
+            ->assertSee('data-toast-duration="2800"', false)
+            ->assertDontSee('data-flash-message', false);
+
+        $this->get(route('products.index'))
+            ->assertOk()
+            ->assertDontSee('Producto guardado correctamente.')
+            ->assertDontSee('data-toast-duration', false);
     }
 
     public function test_product_is_not_created_with_a_non_image_upload(): void

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['receipt_number', 'client_reference', 'delivery_run_order_id', 'status', 'method', 'amount', 'reference', 'notes', 'received_at', 'received_by', 'voided_at', 'voided_by', 'void_reason'])]
 class DeliveryPayment extends Model
@@ -30,6 +31,16 @@ class DeliveryPayment extends Model
     public function voidedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'voided_by');
+    }
+
+    public function accountEntry(): HasOne
+    {
+        return $this->hasOne(CustomerAccountEntry::class);
+    }
+
+    public function settlementLine(): HasOne
+    {
+        return $this->hasOne(DeliverySettlementLine::class);
     }
 
     protected function casts(): array

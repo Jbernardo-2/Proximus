@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\RecordDeliveryPaymentAction;
+use App\Actions\RecordDeliverySettlementAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\StoreDeliveryPaymentRequest;
-use App\Http\Resources\Api\V1\DeliveryPaymentResource;
+use App\Http\Requests\StoreDeliverySettlementRequest;
+use App\Http\Resources\Api\V1\DeliveryRunOrderResource;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunOrder;
 use App\Models\User;
@@ -14,16 +14,27 @@ use Illuminate\Http\JsonResponse;
 class DeliveryPaymentController extends Controller
 {
     public function store(
-        StoreDeliveryPaymentRequest $request,
+        StoreDeliverySettlementRequest $request,
         DeliveryRun $deliveryRun,
         DeliveryRunOrder $runOrder,
-        RecordDeliveryPaymentAction $recordPayment,
+        RecordDeliverySettlementAction $recordSettlement,
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
-        $payment = $recordPayment->handle($deliveryRun, $runOrder, $request->validated(), $user);
+        $recordSettlement->handle($deliveryRun, $runOrder, $request->validated(), $user);
+        $runOrder->refresh()->load([
+            'order',
+            'items',
+            'payments.receivedBy',
+            'payments.voidedBy',
+            'completedBy',
+            'outcomeRecordedBy',
+            'settlement.lines.deliveryPayment',
+            'settlement.lines.receivable',
+            'settlement.settledBy',
+        ]);
 
-        return (new DeliveryPaymentResource($payment->load(['receivedBy', 'voidedBy'])))
+        return (new DeliveryRunOrderResource($runOrder))
             ->response()
             ->setStatusCode(201);
     }

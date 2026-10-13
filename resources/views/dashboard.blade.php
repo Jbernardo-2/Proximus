@@ -2,7 +2,7 @@
 
 @section('title', 'Resumen')
 @section('page-title', 'Resumen de la operación')
-@section('page-subtitle', 'Clientes, rutas, preventa, inventario y catálogo en una sola operación.')
+@section('page-subtitle', auth()->user()->role === \App\UserRole::Repartidor ? 'Tu ruta, entregas y cobranza de hoy en un solo lugar.' : 'Clientes, rutas, preventa, inventario y catálogo en una sola operación.')
 
 @section('header-actions')
     @can('manage-orders')
@@ -17,6 +17,90 @@
 @endsection
 
 @section('content')
+    @if($driverDashboard !== null)
+        @php
+            $driverMetrics = $driverDashboard['metrics'];
+            $currency = mb_strtoupper((string) config('proximus.currency', 'HNL'));
+            $currentRun = $driverDashboard['currentRun'];
+            $nextStop = $driverDashboard['nextStop'];
+        @endphp
+
+        <div class="space-y-7" data-driver-dashboard>
+            <section class="overflow-hidden rounded-3xl bg-ink-950 text-white shadow-xl">
+                <div class="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-center">
+                    <div>
+                        <p class="text-xs font-bold tracking-[0.18em] text-mint-100 uppercase">Panel del repartidor</p>
+                        <h2 class="mt-2 text-3xl font-black sm:text-4xl">{{ $currentRun ? 'Tu jornada está en marcha' : 'No tienes jornadas activas' }}</h2>
+                        @if($currentRun)
+                            <p class="mt-2 text-stone-300">{{ $currentRun->run_number }} · {{ $currentRun->scheduled_date->format('d/m/Y') }} · {{ $currentRun->vehicle_license_plate ?: ($currentRun->vehicle_code ?: 'Sin vehículo') }}</p>
+                            <div class="mt-5 flex flex-wrap gap-3">
+                                <a class="btn-primary" href="{{ route('delivery-runs.show', $currentRun) }}#delivery-progress">Continuar jornada</a>
+                                <a class="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20" href="{{ route('delivery-runs.index') }}">Ver mis jornadas</a>
+                            </div>
+                        @else
+                            <p class="mt-2 text-stone-300">Cuando bodega cargue una jornada, aquí aparecerán tus paradas y el progreso.</p>
+                        @endif
+                    </div>
+                    <div class="relative mx-auto grid size-48 place-items-center">
+                        <svg class="absolute inset-0 size-full -rotate-90" viewBox="0 0 120 120" role="img" aria-label="{{ $driverMetrics['progress'] }}% de la ruta completada">
+                            <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="10" class="text-white/10" />
+                            <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="10" pathLength="100" stroke-dasharray="{{ $driverMetrics['progress'] }} 100" stroke-linecap="round" class="text-mint-100 transition-all duration-500" />
+                        </svg>
+                        <div class="text-center"><p class="text-4xl font-black">{{ $driverMetrics['progress'] }}%</p><p class="text-xs font-bold text-stone-300 uppercase">completado</p></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <article class="card p-5"><p class="text-xs font-bold text-ink-600 uppercase">Paradas completadas</p><p class="mt-2 text-3xl font-black text-emerald-700">{{ $driverMetrics['completed'] }}/{{ $driverMetrics['stops'] }}</p><p class="mt-1 text-xs text-ink-600">{{ $driverMetrics['pending'] }} pendientes</p></article>
+                <article class="card p-5"><p class="text-xs font-bold text-ink-600 uppercase">Venta entregada</p><p class="mt-2 text-3xl font-black text-ink-950">{{ $currency }} {{ number_format((float) $driverMetrics['delivered'], 2) }}</p><p class="mt-1 text-xs text-ink-600">Mercancía recibida por clientes</p></article>
+                <article class="card p-5"><p class="text-xs font-bold text-ink-600 uppercase">Cobrado</p><p class="mt-2 text-3xl font-black text-emerald-700">{{ $currency }} {{ number_format((float) $driverMetrics['collected'], 2) }}</p><p class="mt-1 text-xs text-ink-600">Efectivo y pagos electrónicos</p></article>
+                <article class="card p-5"><p class="text-xs font-bold text-ink-600 uppercase">Saldo a crédito</p><p class="mt-2 text-3xl font-black {{ bccomp($driverMetrics['credit'], '0', 4) > 0 ? 'text-amber-700' : 'text-emerald-700' }}">{{ $currency }} {{ number_format((float) $driverMetrics['credit'], 2) }}</p><p class="mt-1 text-xs text-ink-600">Pendiente de cobranza</p></article>
+            </section>
+
+            @if($nextStop)
+                <section class="grid gap-5 rounded-2xl border border-sky-200 bg-sky-50 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                    <div><p class="text-xs font-bold tracking-[0.14em] text-sky-700 uppercase">Siguiente parada · #{{ $nextStop->visit_order }}</p><h2 class="mt-1 text-2xl font-black text-ink-950">{{ $nextStop->order->customer_name }}</h2><p class="mt-1 text-sm text-ink-700">{{ $nextStop->order->order_number }} · {{ $nextStop->order->customer_address ?: 'Dirección no registrada' }}</p></div>
+                    <a class="btn-primary" href="{{ route('delivery-runs.show', $currentRun) }}#stop-{{ $nextStop->id }}">Abrir entrega</a>
+                </section>
+            @endif
+
+            <section>
+                <div class="flex flex-wrap items-end justify-between gap-4">
+                    <div><p class="text-xs font-bold tracking-[0.14em] text-leaf-700 uppercase">Jornadas visibles</p><h2 class="mt-1 text-xl font-black text-ink-950">Tu operación</h2></div>
+                    <div class="flex gap-2" role="group" aria-label="Filtrar jornadas">
+                        <button class="btn-secondary bg-ink-950 text-white" type="button" data-run-filter="all" aria-pressed="true">Todas</button>
+                        <button class="btn-secondary" type="button" data-run-filter="open" aria-pressed="false">Abiertas</button>
+                        <button class="btn-secondary" type="button" data-run-filter="completed" aria-pressed="false">Finalizadas</button>
+                    </div>
+                </div>
+                <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                    @forelse($driverDashboard['runs'] as $run)
+                        @php
+                            $runProgress = $run->stops_count > 0 ? (int) round(($run->completed_stops_count / $run->stops_count) * 100) : 0;
+                            $runFilter = $run->status === \App\DeliveryRunStatus::Settled ? 'completed' : 'open';
+                        @endphp
+                        <a class="card block p-5 transition hover:-translate-y-0.5 hover:border-leaf-300 hover:shadow-md" href="{{ route('delivery-runs.show', $run) }}" data-driver-run="{{ $runFilter }}">
+                            <div class="flex items-start justify-between gap-4"><div><p class="font-black text-ink-950">{{ $run->run_number }}</p><p class="text-sm text-ink-600">{{ $run->scheduled_date->format('d/m/Y') }} · {{ $run->vehicle_license_plate ?: 'Sin placa' }}</p></div><x-delivery-run-status-badge :status="$run->status" /></div>
+                            <div class="mt-4 flex items-center justify-between text-sm"><span class="font-semibold text-ink-700">{{ $run->completed_stops_count }} de {{ $run->stops_count }} paradas</span><span class="font-black text-leaf-700">{{ $runProgress }}%</span></div>
+                            <progress class="mt-2 h-2 w-full overflow-hidden rounded-full accent-leaf-600" value="{{ $run->completed_stops_count }}" max="{{ max($run->stops_count, 1) }}">{{ $runProgress }}%</progress>
+                        </a>
+                    @empty
+                        <div class="lg:col-span-2"><x-empty-state title="Sin jornadas asignadas" description="Todavía no hay jornadas abiertas o liquidadas hoy para tu usuario." /></div>
+                    @endforelse
+                </div>
+            </section>
+
+            <section>
+                <div><p class="text-xs font-bold tracking-[0.14em] text-violet-700 uppercase">Logros de la jornada</p><h2 class="mt-1 text-xl font-black text-ink-950">Tu progreso</h2></div>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    @foreach($driverDashboard['achievements'] as $achievement)
+                        <article class="rounded-2xl border p-5 {{ $achievement['earned'] ? 'border-violet-200 bg-violet-50' : 'border-stone-200 bg-stone-50 opacity-60' }}"><div class="grid size-10 place-items-center rounded-full {{ $achievement['earned'] ? 'bg-violet-600 text-white' : 'bg-stone-200 text-stone-500' }} text-lg font-black">{{ $achievement['earned'] ? '✓' : '○' }}</div><h3 class="mt-3 font-black text-ink-950">{{ $achievement['label'] }}</h3><p class="mt-1 text-sm text-ink-600">{{ $achievement['description'] }}</p></article>
+                    @endforeach
+                </div>
+            </section>
+        </div>
+    @else
     <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @php
             $cards = [];
@@ -124,4 +208,5 @@
             </div>
         @endcan
     </section>
+    @endif
 @endsection

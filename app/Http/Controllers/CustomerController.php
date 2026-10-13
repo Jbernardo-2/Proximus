@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\CustomerCreditStatus;
+use App\CustomerReceivableStatus;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Customer;
 use App\Models\User;
+use App\PaymentMethod;
+use App\Services\CustomerCreditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -22,7 +26,15 @@ class CustomerController extends Controller
 
         return view('operations.customers.index', [
             'customers' => Customer::query()
+                ->with('creditProfile')
                 ->withCount(['routeStops' => fn ($query) => $query->visibleTo($user)])
+                ->withSum([
+                    'receivables as outstanding_balance' => fn ($query) => $query
+                        ->whereIn('status', [
+                            CustomerReceivableStatus::Open->value,
+                            CustomerReceivableStatus::PartiallyPaid->value,
+                        ]),
+                ], 'outstanding_amount')
                 ->when($search !== '', function ($query) use ($search): void {
                     $query->where(function ($builder) use ($search): void {
                         $builder->where('business_name', 'like', "%{$search}%")
@@ -58,13 +70,16 @@ class CustomerController extends Controller
 
     public function store(StoreCustomerRequest $request): RedirectResponse
     {
-        $customer = Customer::query()->create($request->validated());
+        Customer::query()->create($request->validated());
 
-        return redirect()->route('customers.show', $customer)->with('success', 'Cliente creado correctamente.');
+        return redirect()->route('customers.index')->with('success', 'Cliente creado correctamente.');
     }
 
-    public function show(Request $request, Customer $customer): View
-    {
+    public function show(
+        Request $request,
+        Customer $customer,
+        CustomerCreditService $creditService,
+    ): View {
         /** @var User $user */
         $user = $request->user();
         $customer->load([
@@ -74,9 +89,44 @@ class CustomerController extends Controller
                 ->orderBy('visit_day')
                 ->orderBy('visit_order')
                 ->orderBy('id'),
+            'receivables' => fn ($query) => $query
+                ->with(['order', 'allocations.accountEntry'])
+                ->orderByDesc('opened_at')
+                ->orderByDesc('id'),
+            'accountEntries' => fn ($query) => $query
+                ->with(['order', 'createdBy', 'paymentLines', 'allocations.receivable.order', 'reversalOf'])
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->limit(100),
+            'creditProfile.approvedBy',
+            'creditProfile.updatedBy',
+            'creditProfileHistory' => fn ($query) => $query
+                ->with('changedBy')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit(25),
+            'creditAuthorizations' => fn ($query) => $query
+                ->with(['authorizedBy', 'order'])
+                ->orderByDesc('authorized_at')
+                ->orderByDesc('id')
+                ->limit(25),
         ]);
+        $accountTotals = $customer->accountEntries()
+            ->selectRaw('coalesce(sum(debit_amount), 0) as purchases_total, coalesce(sum(credit_amount), 0) as payments_total')
+            ->first();
+        $creditSummary = $creditService->summary($customer);
 
-        return view('operations.customers.show', compact('customer'));
+        return view('operations.customers.show', [
+            'customer' => $customer,
+            'openReceivables' => $customer->receivables
+                ->filter(fn ($receivable): bool => $receivable->status->isOutstanding()),
+            'purchasesTotal' => (string) ($accountTotals?->purchases_total ?? '0'),
+            'paymentsTotal' => (string) ($accountTotals?->payments_total ?? '0'),
+            'accountBalance' => $creditSummary['ledger_balance'],
+            'creditSummary' => $creditSummary,
+            'creditStatuses' => CustomerCreditStatus::cases(),
+            'paymentMethods' => PaymentMethod::cases(),
+        ]);
     }
 
     public function edit(Customer $customer): View
@@ -93,8 +143,11 @@ class CustomerController extends Controller
 
     public function destroy(Customer $customer): RedirectResponse
     {
-        if ($customer->routeStops()->exists()) {
-            return back()->with('error', 'No se puede eliminar un cliente asignado a rutas. Puedes desactivarlo o retirar primero sus visitas.');
+        if ($customer->routeStops()->exists()
+            || $customer->orders()->exists()
+            || $customer->receivables()->exists()
+            || $customer->accountEntries()->exists()) {
+            return back()->with('error', 'No se puede eliminar un cliente con rutas, pedidos o historial financiero. Desactívalo para conservar la trazabilidad.');
         }
 
         $customer->delete();

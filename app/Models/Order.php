@@ -90,6 +90,16 @@ class Order extends Model
         return $this->hasMany(DeliveryRunOrder::class);
     }
 
+    public function customerReceivables(): HasMany
+    {
+        return $this->hasMany(CustomerReceivable::class);
+    }
+
+    public function customerAccountEntries(): HasMany
+    {
+        return $this->hasMany(CustomerAccountEntry::class);
+    }
+
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         return match ($user->role) {

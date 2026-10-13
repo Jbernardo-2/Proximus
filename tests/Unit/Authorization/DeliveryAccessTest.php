@@ -15,7 +15,7 @@ class DeliveryAccessTest extends TestCase
             'admin' => [UserRole::Admin, true, true, true, true, true, true, ['deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage']],
             'supervisor' => [UserRole::Supervisor, true, true, true, true, true, true, ['deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage']],
             'preventista' => [UserRole::Preventista, false, false, false, false, false, false, []],
-            'bodeguero' => [UserRole::Bodeguero, true, false, true, false, false, false, ['deliveries:view', 'deliveries:prepare']],
+            'bodeguero' => [UserRole::Bodeguero, true, true, true, false, false, false, ['deliveries:view', 'deliveries:manage', 'deliveries:prepare']],
             'repartidor' => [UserRole::Repartidor, true, false, false, true, false, false, ['deliveries:view', 'deliveries:execute']],
         ];
     }

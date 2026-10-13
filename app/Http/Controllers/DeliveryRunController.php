@@ -18,7 +18,9 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Warehouse;
 use App\OrderStatus;
-use App\PaymentMethod;
+use App\PaymentTerm;
+use App\Services\DeliveryInvoiceService;
+use App\SettlementMethod;
 use App\UserRole;
 use DateTimeImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -159,7 +161,7 @@ class DeliveryRunController extends Controller
             ->with('success', 'Jornada creada. Ahora asigna los pedidos confirmados.');
     }
 
-    public function show(Request $request, DeliveryRun $deliveryRun): View
+    public function show(Request $request, DeliveryRun $deliveryRun, DeliveryInvoiceService $invoiceService): View
     {
         Gate::authorize('view', $deliveryRun);
         /** @var User $user */
@@ -177,12 +179,17 @@ class DeliveryRunController extends Controller
             'runOrders' => fn ($query) => $query
                 ->with([
                     'order.customer',
+                    'order.salesRoute.salesperson',
                     'order.salesperson',
                     'items.product',
                     'items.presentation',
                     'payments.receivedBy',
                     'payments.voidedBy',
+                    'settlement.lines.deliveryPayment',
+                    'settlement.lines.receivable',
+                    'settlement.settledBy',
                     'completedBy',
+                    'outcomeRecordedBy',
                     'preparedBy',
                 ])
                 ->orderBy('visit_order')
@@ -190,6 +197,10 @@ class DeliveryRunController extends Controller
             'statusHistory' => fn ($query) => $query->with('changedBy')->latest()->orderByDesc('id'),
         ])->loadCount('runOrders');
         $allItems = $deliveryRun->runOrders->flatMap->items;
+        $cashOrdersNeedingCreditReason = $deliveryRun->runOrders
+            ->filter(fn ($runOrder): bool => $runOrder->order->payment_term === PaymentTerm::Cash
+                && bccomp((string) $runOrder->balance_due, '0', 4) > 0
+                && blank($runOrder->credit_reason));
         $pickingSummary = $allItems
             ->groupBy('product_presentation_id')
             ->map(function ($items): array {
@@ -218,9 +229,23 @@ class DeliveryRunController extends Controller
             ->sortBy(fn (array $row): string => $row['product_name'].'|'.$row['presentation_name'])
             ->values();
         $canAssign = Gate::forUser($user)->allows('assignOrders', $deliveryRun);
+        $reportRoutes = $deliveryRun->runOrders
+            ->pluck('order.salesRoute')
+            ->filter()
+            ->unique('id')
+            ->filter(fn (SalesRoute $salesRoute): bool => Gate::forUser($user)
+                ->allows('viewRouteReport', [$deliveryRun, $salesRoute]))
+            ->sortBy('name')
+            ->values();
+        $invoicedRunOrder = $deliveryRun->runOrders
+            ->firstWhere('id', $request->session()->get('delivery_invoice_run_order_id'));
 
         return view('deliveries.show', [
             'deliveryRun' => $deliveryRun,
+            'invoiceDialog' => $invoicedRunOrder?->settlement === null
+                ? null
+                : $invoiceService->dialogData($invoicedRunOrder),
+            'cashOrdersNeedingCreditReason' => $cashOrdersNeedingCreditReason,
             'candidateOrders' => $canAssign ? Order::query()
                 ->where('status', OrderStatus::Confirmed)
                 ->where('warehouse_id', $deliveryRun->warehouse_id)
@@ -231,6 +256,7 @@ class DeliveryRunController extends Controller
                 ->orderBy('order_number')
                 ->get() : collect(),
             'pickingSummary' => $pickingSummary,
+            'reportRoutes' => $reportRoutes,
             'inventoryStocks' => InventoryStock::query()
                 ->where('warehouse_id', $deliveryRun->warehouse_id)
                 ->whereIn('product_id', $allItems->pluck('product_id')->unique())
@@ -247,7 +273,7 @@ class DeliveryRunController extends Controller
             'canCancel' => Gate::forUser($user)->allows('cancel', $deliveryRun),
             'canVoidPayments' => $user->canSettleDeliveries() && $deliveryRun->status->isOpen(),
             'outcomeReasons' => DeliveryOutcomeReason::cases(),
-            'paymentMethods' => PaymentMethod::cases(),
+            'settlementMethods' => SettlementMethod::cases(),
         ]);
     }
 

@@ -1,4 +1,6 @@
 import './customer-location.js';
+import './dashboard.js';
+import './notifications.js';
 import './remote-picker.js';
 
 const mobileMenuButton = document.querySelector('[data-mobile-menu-button]');
@@ -6,6 +8,84 @@ const mobileMenu = document.querySelector('[data-mobile-menu]');
 
 mobileMenuButton?.addEventListener('click', () => {
     mobileMenu?.classList.toggle('hidden');
+});
+
+const appDialog = document.querySelector('[data-app-dialog]');
+const appDialogTitle = appDialog?.querySelector('[data-app-dialog-title]');
+const appDialogMessage = appDialog?.querySelector('[data-app-dialog-message]');
+const appDialogIcon = appDialog?.querySelector('[data-app-dialog-icon]');
+const appDialogConfirm = appDialog?.querySelector('[data-app-dialog-confirm]');
+const appDialogCancel = appDialog?.querySelector('[data-app-dialog-cancel]');
+
+appDialog?.querySelector('[data-app-dialog-close]')?.addEventListener('click', () => {
+    appDialog.close('cancel');
+});
+appDialogConfirm?.addEventListener('click', () => {
+    appDialog.close(appDialog.dataset.dialogMode === 'confirm' ? 'confirm' : 'accept');
+});
+appDialogCancel?.addEventListener('click', () => {
+    appDialog.close('cancel');
+});
+
+const showAppDialog = ({ title, messages, type = 'info', confirmText = 'Entendido', cancelText = null }) => {
+    if (! appDialog) {
+        return Promise.resolve(false);
+    }
+
+    const isConfirmation = cancelText !== null;
+    const iconStyles = {
+        success: ['bg-mint-100', 'text-leaf-700', '✓'],
+        error: ['bg-red-100', 'text-red-700', '!'],
+        warning: ['bg-amber-100', 'text-amber-800', '!'],
+        info: ['bg-mint-100', 'text-leaf-700', 'i'],
+    };
+    const [backgroundClass, colorClass, icon] = iconStyles[type] ?? iconStyles.info;
+
+    appDialog.dataset.dialogMode = isConfirmation ? 'confirm' : 'alert';
+    appDialogTitle.textContent = title;
+    appDialogMessage.replaceChildren();
+    messages.forEach((message) => {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = message;
+        appDialogMessage.append(paragraph);
+    });
+    appDialogIcon.classList.remove('bg-mint-100', 'text-leaf-700', 'bg-red-100', 'text-red-700', 'bg-amber-100', 'text-amber-800');
+    appDialogIcon.classList.add(backgroundClass, colorClass);
+    appDialogIcon.textContent = icon;
+    appDialogConfirm.textContent = confirmText;
+    appDialogCancel.textContent = cancelText ?? 'Cancelar';
+    appDialogCancel.classList.toggle('hidden', ! isConfirmation);
+    appDialog.returnValue = '';
+
+    return new Promise((resolve) => {
+        appDialog.addEventListener('close', () => {
+            resolve(appDialog.returnValue === 'confirm');
+        }, { once: true });
+        appDialog.showModal();
+    });
+};
+
+document.querySelectorAll('[data-toast]').forEach((toast) => {
+    let removalTimer;
+    const duration = Number.parseInt(toast.dataset.toastDuration ?? '2800', 10);
+
+    const dismissToast = () => {
+        if (toast.dataset.toastDismissing === 'true') {
+            return;
+        }
+
+        toast.dataset.toastDismissing = 'true';
+        toast.classList.add('-translate-y-2', 'pointer-events-none', 'opacity-0');
+        removalTimer = window.setTimeout(() => toast.remove(), 200);
+    };
+
+    const dismissTimer = window.setTimeout(dismissToast, Number.isNaN(duration) ? 2800 : duration);
+
+    toast.querySelector('[data-toast-close]')?.addEventListener('click', () => {
+        window.clearTimeout(dismissTimer);
+        window.clearTimeout(removalTimer);
+        dismissToast();
+    });
 });
 
 document.querySelectorAll('[data-password-toggle]').forEach((button) => {
@@ -25,10 +105,45 @@ document.querySelectorAll('[data-password-toggle]').forEach((button) => {
 });
 
 document.querySelectorAll('form[data-confirm]').forEach((form) => {
-    form.addEventListener('submit', (event) => {
-        if (! window.confirm(form.dataset.confirm)) {
-            event.preventDefault();
+    let confirmationPending = false;
+    let confirmationPassed = false;
+
+    form.addEventListener('submit', async (event) => {
+        if (confirmationPassed) {
+            confirmationPassed = false;
+
+            return;
         }
+
+        event.preventDefault();
+
+        if (confirmationPending) {
+            return;
+        }
+
+        confirmationPending = true;
+        const submitter = event.submitter;
+        const confirmed = await showAppDialog({
+            title: '¿Confirmas esta acción?',
+            messages: [form.dataset.confirm],
+            type: 'warning',
+            confirmText: 'Continuar',
+            cancelText: 'Cancelar',
+        });
+        confirmationPending = false;
+
+        if (! confirmed) {
+            return;
+        }
+
+        confirmationPassed = true;
+
+        if (submitter) {
+            form.requestSubmit(submitter);
+        } else {
+            form.requestSubmit();
+        }
+        confirmationPassed = false;
     });
 });
 
@@ -387,6 +502,50 @@ document.querySelectorAll('[data-order-item-form]').forEach((form) => {
     const presentation = form.querySelector('[data-product-presentation-value]');
     const quantity = form.querySelector('[data-order-quantity-input]');
     const output = form.querySelector('[data-order-quote-output]');
+    const warningDialog = form.querySelector('[data-stock-warning-dialog]');
+    const warningProduct = form.querySelector('[data-stock-warning-product]');
+    const warningAvailable = form.querySelector('[data-stock-warning-available]');
+    const warningShortage = form.querySelector('[data-stock-warning-shortage]');
+    let stockCheckPassed = false;
+    let pendingSubmitter = null;
+
+    const fetchQuote = async () => {
+        if (! presentation.value || ! quantity.value) {
+            throw new Error('Selecciona una presentación e indica la cantidad.');
+        }
+
+        const endpoint = new URL(form.dataset.quoteUrl, window.location.origin);
+        endpoint.searchParams.set('product_presentation_id', presentation.value);
+        endpoint.searchParams.set('quantity', quantity.value);
+        const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+        const payload = await response.json();
+
+        if (! response.ok) {
+            const message = Object.values(payload.errors ?? {}).flat()[0]
+                ?? payload.message
+                ?? 'No fue posible verificar la disponibilidad.';
+            throw new Error(message);
+        }
+
+        return payload.data;
+    };
+
+    const submitAfterStockCheck = () => {
+        stockCheckPassed = true;
+
+        if (pendingSubmitter) {
+            form.requestSubmit(pendingSubmitter);
+        } else {
+            form.requestSubmit();
+        }
+    };
+
+    presentation.addEventListener('change', () => {
+        stockCheckPassed = false;
+    });
+    quantity.addEventListener('input', () => {
+        stockCheckPassed = false;
+    });
 
     button?.addEventListener('click', async () => {
         if (! presentation.value || ! quantity.value) {
@@ -444,6 +603,51 @@ document.querySelectorAll('[data-order-item-form]').forEach((form) => {
             button.disabled = false;
         }
     });
+
+    form.addEventListener('submit', async (event) => {
+        if (stockCheckPassed) {
+            return;
+        }
+
+        event.preventDefault();
+        output.classList.remove('hidden');
+        output.innerHTML = '<p class="rounded-xl bg-stone-50 p-4 text-sm text-ink-600">Verificando disponibilidad…</p>';
+
+        try {
+            const quote = await fetchQuote();
+            const stock = quote.stock;
+
+            if (stock.has_shortage) {
+                output.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">Este producto dejaría un faltante de ${escapeHtml(formatOrderQuantity(stock.shortage_quantity))} ${escapeHtml(stock.base_unit_symbol)}.</p>`;
+                pendingSubmitter = event.submitter;
+                warningProduct.textContent = `${quote.selected.product_name} · ${quote.selected.presentation_name}`;
+                warningAvailable.textContent = `${formatOrderQuantity(stock.available_quantity)} ${stock.base_unit_symbol}`;
+                warningShortage.textContent = `${formatOrderQuantity(stock.shortage_quantity)} ${stock.base_unit_symbol}`;
+                warningDialog.showModal();
+
+                return;
+            }
+
+            pendingSubmitter = event.submitter;
+            submitAfterStockCheck();
+        } catch (error) {
+            showOrderQuoteError(output, error.message);
+        }
+    });
+
+    form.querySelector('[data-stock-warning-cancel]')?.addEventListener('click', () => {
+        pendingSubmitter = null;
+        warningDialog.close();
+    });
+
+    form.querySelector('[data-stock-warning-accept]')?.addEventListener('click', () => {
+        warningDialog.close();
+        submitAfterStockCheck();
+    });
+
+    warningDialog?.addEventListener('cancel', () => {
+        pendingSubmitter = null;
+    });
 });
 
 document.querySelectorAll('[data-preparation-form]').forEach((form) => {
@@ -473,24 +677,277 @@ document.querySelectorAll('[data-preparation-form]').forEach((form) => {
     });
 });
 
-document.querySelectorAll('[data-payment-form]').forEach((form) => {
-    const method = form.querySelector('[data-payment-method]');
-    const reference = form.querySelector('[data-payment-reference]');
-    const requiredLabel = form.querySelector('[data-reference-required-label]');
+document.querySelectorAll('[data-delivery-quantity]').forEach((input) => {
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('mouseup', (event) => event.preventDefault());
+});
 
-    const syncReference = () => {
+document.querySelectorAll('[data-combined-payment-form]').forEach((form) => {
+    const rows = form.querySelector('[data-payment-rows]');
+    const template = form.querySelector('[data-payment-row-template]');
+    const addButton = form.querySelector('[data-add-payment]');
+    const submitButton = form.querySelector('[data-payment-submit]');
+    const paymentTotal = form.querySelector('[data-payment-total]');
+    const creditTotal = form.querySelector('[data-credit-total]');
+    const error = form.querySelector('[data-payment-error]');
+    const creditReason = form.querySelector('[data-credit-reason]');
+    const creditReasonWrap = form.querySelector('[data-credit-reason-wrap]');
+    const balance = Number(form.dataset.balance ?? 0);
+    const currency = form.dataset.currency ?? 'HNL';
+    let nextIndex = 1;
+
+    const formatMoney = (value) => `${currency} ${new Intl.NumberFormat('es-HN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(value)}`;
+
+    const syncReference = (row) => {
+        const method = row.querySelector('[data-payment-method]');
+        const reference = row.querySelector('[data-payment-reference]');
+        const requiredLabel = row.querySelector('[data-reference-required-label]');
         const isRequired = method.selectedOptions[0]?.dataset.requiresReference === 'true';
-        reference.required = isRequired;
-        requiredLabel.textContent = isRequired ? '*' : '(opcional)';
+        const isCredit = method.selectedOptions[0]?.dataset.isCredit === 'true';
+
+        reference.required = isRequired && ! isCredit;
+        reference.disabled = isCredit;
+        reference.value = isCredit ? '' : reference.value;
+        requiredLabel.textContent = isRequired && ! isCredit ? '*' : '(opcional)';
     };
 
-    method.addEventListener('change', syncReference);
-    syncReference();
+    const syncTotals = () => {
+        const total = [...rows.querySelectorAll('[data-payment-amount]')]
+            .reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+        const remaining = balance - total;
+        const isOverBalance = total > balance + 0.00001;
+        const isExact = Math.abs(remaining) <= 0.00001;
+        const hasCredit = [...rows.querySelectorAll('[data-payment-method]')]
+            .some((select) => select.selectedOptions[0]?.dataset.isCredit === 'true');
+
+        paymentTotal.textContent = formatMoney(total);
+        creditTotal.textContent = formatMoney(Math.abs(remaining));
+        creditTotal.closest('div').querySelector('p').textContent = isOverBalance ? 'Monto excedente' : 'Falta distribuir';
+        error.textContent = isOverBalance
+            ? 'La distribución supera el total entregado.'
+            : 'La distribución debe completar exactamente el total entregado.';
+        error.classList.toggle('hidden', isExact);
+        submitButton.disabled = total <= 0 || ! isExact;
+        creditReason.required = hasCredit;
+        creditReasonWrap.classList.toggle('hidden', ! hasCredit);
+    };
+
+    const bindRow = (row) => {
+        const method = row.querySelector('[data-payment-method]');
+
+        method.addEventListener('change', () => {
+            syncReference(row);
+            syncTotals();
+        });
+        row.querySelector('[data-payment-amount]').addEventListener('input', syncTotals);
+        row.querySelector('[data-remove-payment]')?.addEventListener('click', () => {
+            row.remove();
+            addButton.disabled = false;
+            syncTotals();
+        });
+        syncReference(row);
+    };
+
+    rows.querySelectorAll('[data-payment-row]').forEach(bindRow);
+    addButton.addEventListener('click', () => {
+        if (rows.querySelectorAll('[data-payment-row]').length >= 10) {
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = template.innerHTML.replaceAll('__INDEX__', String(nextIndex));
+        const row = wrapper.firstElementChild;
+        nextIndex += 1;
+        rows.append(row);
+        bindRow(row);
+        syncTotals();
+        row.querySelector('[data-payment-method]').focus();
+        addButton.disabled = rows.querySelectorAll('[data-payment-row]').length >= 10;
+    });
+    syncTotals();
+});
+
+const invoiceDialog = document.querySelector('[data-invoice-dialog]');
+
+if (invoiceDialog) {
+    const shareButton = invoiceDialog.querySelector('[data-invoice-share]');
+
+    invoiceDialog.querySelector('[data-invoice-dialog-finish]').addEventListener('click', () => {
+        invoiceDialog.close();
+    });
+
+    shareButton.addEventListener('click', async (event) => {
+        event.preventDefault();
+        const originalText = shareButton.textContent;
+        const downloadAndOpenWhatsapp = () => {
+            const link = document.createElement('a');
+
+            link.href = shareButton.dataset.downloadUrl;
+            link.download = shareButton.dataset.filename;
+            document.body.append(link);
+            link.click();
+            link.remove();
+            window.open(shareButton.href, '_blank', 'noopener');
+        };
+
+        if (! navigator.share || ! navigator.canShare) {
+            downloadAndOpenWhatsapp();
+
+            return;
+        }
+
+        shareButton.textContent = 'Preparando factura…';
+
+        try {
+            const response = await fetch(shareButton.dataset.downloadUrl, { credentials: 'same-origin' });
+
+            if (! response.ok) {
+                throw new Error('No se pudo generar la factura.');
+            }
+
+            const file = new File([await response.blob()], shareButton.dataset.filename, { type: 'application/pdf' });
+
+            if (navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: shareButton.dataset.shareTitle,
+                    text: shareButton.dataset.shareText,
+                });
+            } else {
+                downloadAndOpenWhatsapp();
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                downloadAndOpenWhatsapp();
+            }
+        } finally {
+            shareButton.textContent = originalText;
+        }
+    });
+
+    invoiceDialog.showModal();
+}
+
+document.querySelectorAll('[data-customer-payment-form]').forEach((form) => {
+    const rows = form.querySelector('[data-customer-payment-rows]');
+    const template = form.querySelector('[data-customer-payment-row-template]');
+    const addButton = form.querySelector('[data-add-customer-payment]');
+    const totalInput = form.querySelector('[data-customer-payment-total-input]');
+    const allocationInputs = [...form.querySelectorAll('[data-receivable-allocation]')];
+    const receivedTotal = form.querySelector('[data-customer-received-total]');
+    const appliedTotal = form.querySelector('[data-customer-applied-total]');
+    const unallocatedTotal = form.querySelector('[data-customer-unallocated-total]');
+    const error = form.querySelector('[data-customer-payment-error]');
+    const submit = form.querySelector('[data-customer-payment-submit]');
+    const currency = form.dataset.currency ?? 'HNL';
+    let nextIndex = 1;
+
+    const formatMoney = (value) => `${currency} ${new Intl.NumberFormat('es-HN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(value)}`;
+
+    const syncReference = (row) => {
+        const method = row.querySelector('[data-customer-payment-method]');
+        const reference = row.querySelector('[data-customer-payment-reference]');
+        const referenceLabel = row.querySelector('[data-customer-reference-label]');
+        const isRequired = method.selectedOptions[0]?.dataset.requiresReference === 'true';
+
+        reference.required = isRequired;
+        referenceLabel.textContent = isRequired ? '*' : '(opcional)';
+    };
+
+    const syncTotals = () => {
+        const received = [...rows.querySelectorAll('[data-customer-payment-line-amount]')]
+            .reduce((total, input) => total + (Number(input.value) || 0), 0);
+        const applied = allocationInputs.reduce((total, input) => total + (Number(input.value) || 0), 0);
+        const difference = received - applied;
+        const isExact = received > 0 && Math.abs(difference) <= 0.00001;
+
+        totalInput.value = received.toFixed(2);
+        receivedTotal.textContent = formatMoney(received);
+        appliedTotal.textContent = formatMoney(applied);
+        unallocatedTotal.textContent = formatMoney(Math.abs(difference));
+        unallocatedTotal.closest('div').querySelector('p').textContent = difference < 0 ? 'Monto excedente' : 'Falta aplicar';
+        error.classList.toggle('hidden', received <= 0 || isExact);
+        submit.disabled = ! isExact;
+    };
+
+    const autoAllocate = () => {
+        let remaining = [...rows.querySelectorAll('[data-customer-payment-line-amount]')]
+            .reduce((total, input) => total + (Number(input.value) || 0), 0);
+
+        allocationInputs.forEach((input) => {
+            const allocation = Math.min(remaining, Number(input.dataset.outstanding) || 0);
+            input.value = allocation > 0 ? allocation.toFixed(2) : '0';
+            remaining = Math.max(remaining - allocation, 0);
+        });
+        syncTotals();
+    };
+
+    const bindRow = (row) => {
+        row.querySelector('[data-customer-payment-method]').addEventListener('change', () => syncReference(row));
+        row.querySelector('[data-customer-payment-line-amount]').addEventListener('input', syncTotals);
+        row.querySelector('[data-remove-customer-payment]')?.addEventListener('click', () => {
+            row.remove();
+            addButton.disabled = false;
+            syncTotals();
+        });
+        syncReference(row);
+    };
+
+    rows.querySelectorAll('[data-customer-payment-row]').forEach(bindRow);
+    addButton.addEventListener('click', () => {
+        if (rows.querySelectorAll('[data-customer-payment-row]').length >= 10) {
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = template.innerHTML.replaceAll('__INDEX__', String(nextIndex));
+        const row = wrapper.firstElementChild;
+        nextIndex += 1;
+        rows.append(row);
+        bindRow(row);
+        syncTotals();
+        row.querySelector('[data-customer-payment-method]').focus();
+        addButton.disabled = rows.querySelectorAll('[data-customer-payment-row]').length >= 10;
+    });
+    allocationInputs.forEach((input) => input.addEventListener('input', syncTotals));
+    form.querySelector('[data-auto-allocate]').addEventListener('click', autoAllocate);
+    syncTotals();
+});
+
+document.querySelectorAll('[data-driver-dashboard]').forEach((dashboard) => {
+    const buttons = dashboard.querySelectorAll('[data-run-filter]');
+    const runs = dashboard.querySelectorAll('[data-driver-run]');
+
+    buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const filter = button.dataset.runFilter;
+
+            buttons.forEach((candidate) => {
+                const selected = candidate === button;
+                candidate.setAttribute('aria-pressed', String(selected));
+                candidate.classList.toggle('bg-ink-950', selected);
+                candidate.classList.toggle('text-white', selected);
+            });
+            runs.forEach((run) => {
+                run.classList.toggle('hidden', filter !== 'all' && run.dataset.driverRun !== filter);
+            });
+        });
+    });
 });
 
 function showOrderQuoteError(output, message) {
     output.classList.remove('hidden');
     output.innerHTML = `<p class="rounded-xl bg-red-50 p-3 text-sm text-red-700">${escapeHtml(message)}</p>`;
+}
+
+function formatOrderQuantity(value) {
+    return new Intl.NumberFormat('es-HN', { maximumFractionDigits: 6 }).format(Number(value ?? 0));
 }
 
 function escapeHtml(value) {

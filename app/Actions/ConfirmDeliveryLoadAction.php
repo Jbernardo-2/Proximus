@@ -12,16 +12,20 @@ use App\Models\InventoryReservation;
 use App\Models\Order;
 use App\Models\User;
 use App\OrderStatus;
+use App\Services\OperationalNotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ConfirmDeliveryLoadAction
 {
-    public function __construct(private ApplyInventoryDeltaAction $applyDelta) {}
+    public function __construct(
+        private ApplyInventoryDeltaAction $applyDelta,
+        private OperationalNotificationService $notifications,
+    ) {}
 
     public function handle(DeliveryRun $deliveryRun, User $actor): DeliveryRun
     {
-        return DB::transaction(function () use ($deliveryRun, $actor): DeliveryRun {
+        $loadedRun = DB::transaction(function () use ($deliveryRun, $actor): DeliveryRun {
             $run = DeliveryRun::query()->with('warehouse')->lockForUpdate()->findOrFail($deliveryRun->id);
 
             if ($run->status !== DeliveryRunStatus::Preparing) {
@@ -189,5 +193,9 @@ class ConfirmDeliveryLoadAction
 
             return $run;
         }, 3);
+
+        $this->notifications->deliveryRunLoaded($loadedRun);
+
+        return $loadedRun;
     }
 }

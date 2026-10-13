@@ -11,8 +11,8 @@ use App\Actions\DepartDeliveryRunAction;
 use App\Actions\SaveDeliveryPreparationAction;
 use App\Actions\StartDeliveryPreparationAction;
 use App\DeliveryOrderStatus;
-use App\DeliveryPaymentStatus;
 use App\DeliveryRunStatus;
+use App\Models\CustomerCreditProfile;
 use App\Models\DeliveryPayment;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunOrder;
@@ -26,8 +26,8 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\OrderPriceSource;
 use App\OrderStatus;
-use App\PaymentMethod;
 use App\PaymentTerm;
+use App\SettlementMethod;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -91,7 +91,7 @@ class DeliveryApiTest extends TestCase
         $driver = User::factory()->repartidor()->create();
         $context = $this->confirmedOrder('3', '10', '15');
 
-        Sanctum::actingAs($supervisor, ['deliveries:manage']);
+        Sanctum::actingAs($bodeguero, ['deliveries:manage']);
         $create = $this->postJson('/api/v1/delivery-runs', [
             'warehouse_id' => $context['warehouse']->id,
             'driver_id' => $driver->id,
@@ -143,15 +143,21 @@ class DeliveryApiTest extends TestCase
                 'missing_quantity' => '0',
             ]],
         ])->assertOk()
-            ->assertJsonPath('data.status', DeliveryOrderStatus::Delivered->value)
+            ->assertJsonPath('data.status', DeliveryOrderStatus::AwaitingPayment->value)
+            ->assertJsonPath('data.outcome_status', DeliveryOrderStatus::Delivered->value)
             ->assertJsonPath('data.delivered_total', '30.0000');
         $this->postJson("/api/v1/delivery-runs/{$runId}/orders/{$runOrder->id}/payments", [
-            'client_reference' => 'MOBILE-PAY-001',
-            'method' => PaymentMethod::Cash->value,
-            'amount' => '30',
+            'allocations' => [[
+                'method' => SettlementMethod::Cash->value,
+                'amount' => '30',
+                'reference' => null,
+            ]],
+            'credit_reason' => null,
         ])->assertCreated()
-            ->assertJsonPath('data.status', DeliveryPaymentStatus::Active->value)
-            ->assertJsonPath('data.amount', '30.0000');
+            ->assertJsonPath('data.status', DeliveryOrderStatus::Delivered->value)
+            ->assertJsonPath('data.collected_total', '30.0000')
+            ->assertJsonPath('data.settlement.lines.0.method', SettlementMethod::Cash->value)
+            ->assertJsonPath('data.settlement.lines.0.amount', '30.0000');
 
         Sanctum::actingAs($supervisor, ['deliveries:settle']);
         $this->postJson("/api/v1/delivery-runs/{$runId}/settle", [
@@ -167,7 +173,7 @@ class DeliveryApiTest extends TestCase
         $this->assertSame('0.000000', $context['stock']->quantity_reserved);
     }
 
-    public function test_mobile_payment_is_idempotent_validated_and_voidable_only_by_supervision(): void
+    public function test_mobile_settlement_is_atomic_validated_and_immutable_after_confirmation(): void
     {
         $supervisor = User::factory()->supervisor()->create();
         $driver = User::factory()->repartidor()->create();
@@ -177,29 +183,37 @@ class DeliveryApiTest extends TestCase
         Sanctum::actingAs($driver, ['deliveries:execute']);
         $baseUrl = "/api/v1/delivery-runs/{$run->id}/orders/{$runOrder->id}/payments";
         $this->postJson($baseUrl, [
-            'method' => PaymentMethod::BankTransfer->value,
-            'amount' => '10',
-            'reference' => null,
-        ])->assertUnprocessable()->assertJsonValidationErrors('reference');
+            'allocations' => [
+                ['method' => SettlementMethod::BankTransfer->value, 'amount' => '10', 'reference' => null],
+                ['method' => SettlementMethod::Credit->value, 'amount' => '10', 'reference' => null],
+            ],
+            'credit_reason' => 'Saldo acordado.',
+        ])->assertUnprocessable()->assertJsonValidationErrors('allocations.0.reference');
         $this->postJson($baseUrl, [
-            'method' => PaymentMethod::Cash->value,
-            'amount' => '21',
-        ])->assertUnprocessable()->assertJsonValidationErrors('amount');
+            'allocations' => [[
+                'method' => SettlementMethod::Cash->value,
+                'amount' => '21',
+                'reference' => null,
+            ]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('allocations');
 
         $payload = [
-            'client_reference' => 'OFFLINE-PAYMENT-ABC',
-            'method' => PaymentMethod::Cash->value,
-            'amount' => '10',
-            'reference' => null,
+            'allocations' => [[
+                'method' => SettlementMethod::Cash->value,
+                'amount' => '20',
+                'reference' => null,
+            ]],
+            'credit_reason' => null,
         ];
-        $first = $this->postJson($baseUrl, $payload)->assertCreated();
-        $second = $this->postJson($baseUrl, $payload)->assertCreated();
-        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $this->postJson($baseUrl, $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.status', DeliveryOrderStatus::Delivered->value);
         $this->assertDatabaseCount('delivery_payments', 1);
+        $this->assertDatabaseCount('delivery_settlements', 1);
 
-        $this->postJson($baseUrl, [...$payload, 'amount' => '9'])
+        $this->postJson($baseUrl, $payload)
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('client_reference');
+            ->assertJsonValidationErrors('delivery_run_order');
         $payment = DeliveryPayment::query()->sole();
 
         $this->postJson("{$baseUrl}/{$payment->id}/void", [
@@ -209,11 +223,11 @@ class DeliveryApiTest extends TestCase
         Sanctum::actingAs($supervisor, ['deliveries:settle']);
         $this->postJson("{$baseUrl}/{$payment->id}/void", [
             'reason' => 'Cobro duplicado reportado por el cliente.',
-        ])->assertOk()
-            ->assertJsonPath('data.status', DeliveryPaymentStatus::Voided->value);
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('payment');
 
-        $this->assertSame('0.0000', $run->refresh()->collected_total);
-        $this->assertSame('20.0000', $run->credit_total);
+        $this->assertSame('20.0000', $run->refresh()->collected_total);
+        $this->assertSame('0.0000', $run->credit_total);
     }
 
     /**
@@ -247,6 +261,11 @@ class DeliveryApiTest extends TestCase
             'salesperson_name' => $salesperson->name,
             'payment_term' => PaymentTerm::Cash,
             'status' => OrderStatus::Draft,
+        ]);
+        CustomerCreditProfile::factory()->create([
+            'customer_id' => $order->customer_id,
+            'credit_limit' => '100000.0000',
+            'term_days' => 30,
         ]);
         OrderItem::query()->create([
             'order_id' => $order->id,

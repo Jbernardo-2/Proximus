@@ -28,12 +28,37 @@ enum UserRole: string
 
     public function canAccessPanel(): bool
     {
-        return $this !== self::Repartidor;
+        return true;
     }
 
     public function canManageCustomers(): bool
     {
         return in_array($this, [self::Admin, self::Supervisor, self::Preventista], true);
+    }
+
+    public function canViewCustomerCredit(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor, self::Preventista], true);
+    }
+
+    public function canConfigureCustomerCredit(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
+    public function canRecordCustomerPayments(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
+    public function canReverseCustomerPayments(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
+    public function canOverrideCustomerCredit(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
     }
 
     public function canManageRoutes(): bool
@@ -91,9 +116,14 @@ enum UserRole: string
         return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero, self::Repartidor], true);
     }
 
+    public function canViewRouteReports(): bool
+    {
+        return true;
+    }
+
     public function canManageDeliveries(): bool
     {
-        return in_array($this, [self::Admin, self::Supervisor], true);
+        return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero], true);
     }
 
     public function canPrepareDeliveries(): bool
@@ -121,6 +151,11 @@ enum UserRole: string
         return $this === self::Admin;
     }
 
+    public function canManageCompanyProfile(): bool
+    {
+        return $this === self::Admin;
+    }
+
     /**
      * @return list<string>
      */
@@ -134,6 +169,22 @@ enum UserRole: string
 
         if ($this->canManageCustomers()) {
             $abilities[] = 'customers:manage';
+        }
+
+        if ($this->canViewCustomerCredit()) {
+            $abilities[] = 'credits:view';
+        }
+
+        if ($this->canConfigureCustomerCredit()) {
+            $abilities[] = 'credits:configure';
+        }
+
+        if ($this->canRecordCustomerPayments()) {
+            $abilities[] = 'payments:record';
+        }
+
+        if ($this->canReverseCustomerPayments()) {
+            $abilities[] = 'payments:reverse';
         }
 
         if ($this->canViewRoutes()) {

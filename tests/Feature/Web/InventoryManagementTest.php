@@ -299,6 +299,152 @@ class InventoryManagementTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 0);
     }
 
+    public function test_bodeguero_can_replenish_integer_stock_from_inventory_index_with_an_audited_movement(): void
+    {
+        $bodeguero = User::factory()->create();
+        $warehouse = $this->defaultWarehouse();
+        [$product] = $this->productWithPresentations(['allows_decimal' => false]);
+        $stock = $this->stock($warehouse, $product, '10', '3');
+
+        $this->actingAs($bodeguero)->get(route('inventory.index'))
+            ->assertOk()
+            ->assertSee('Entrada rápida')
+            ->assertSee('name="quantity" type="number" min="1" step="1" value="" placeholder="0"', false)
+            ->assertDontSee('value="0.000000"', false);
+
+        $response = $this->actingAs($bodeguero)->post(
+            route('inventory-stocks.replenishments.store', $stock),
+            ['quantity' => '200'],
+        );
+
+        $response
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Entrada registrada. El inventario físico y disponible fue actualizado.');
+
+        $stock->refresh();
+        $this->assertSame('210.000000', $stock->quantity_on_hand);
+        $this->assertSame('3.000000', $stock->quantity_reserved);
+        $this->assertSame('207.000000', $stock->availableQuantity());
+
+        $document = InventoryDocument::query()->sole();
+        $this->assertSame(InventoryDocumentType::Receipt, $document->type);
+        $this->assertSame(InventoryDocumentStatus::Posted, $document->status);
+        $this->assertSame($bodeguero->id, $document->created_by);
+        $this->assertDatabaseHas('inventory_document_items', [
+            'inventory_document_id' => $document->id,
+            'product_id' => $product->id,
+            'quantity' => 200,
+            'base_quantity' => 200,
+        ]);
+        $this->assertDatabaseHas('inventory_movements', [
+            'inventory_document_id' => $document->id,
+            'product_id' => $product->id,
+            'type' => InventoryMovementType::Receipt->value,
+            'quantity_on_hand_delta' => 200,
+            'quantity_on_hand_after' => 210,
+            'quantity_reserved_after' => 3,
+            'created_by' => $bodeguero->id,
+        ]);
+    }
+
+    public function test_quick_replenishment_rejects_fractional_quantity_for_integer_product(): void
+    {
+        $bodeguero = User::factory()->create();
+        $warehouse = $this->defaultWarehouse();
+        [$product] = $this->productWithPresentations(['allows_decimal' => false]);
+        $stock = $this->stock($warehouse, $product, '10');
+
+        $this->actingAs($bodeguero)
+            ->post(route('inventory-stocks.replenishments.store', $stock), ['quantity' => '1.5'])
+            ->assertSessionHasErrors([
+                'quantity' => 'Este producto solo admite cantidades enteras.',
+            ]);
+
+        $this->assertSame('10.000000', $stock->refresh()->quantity_on_hand);
+        $this->assertDatabaseCount('inventory_documents', 0);
+        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_quick_replenishment_accepts_fractional_quantity_when_product_allows_it(): void
+    {
+        $bodeguero = User::factory()->create();
+        $warehouse = $this->defaultWarehouse();
+        [$product] = $this->productWithPresentations(['allows_decimal' => true]);
+        $stock = $this->stock($warehouse, $product, '10', '2.25');
+
+        $this->actingAs($bodeguero)
+            ->post(route('inventory-stocks.replenishments.store', $stock), ['quantity' => '1.5'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $stock->refresh();
+        $this->assertSame('11.500000', $stock->quantity_on_hand);
+        $this->assertSame('2.250000', $stock->quantity_reserved);
+        $this->assertSame('9.250000', $stock->availableQuantity());
+    }
+
+    public function test_reorder_point_rejects_fractional_quantity_for_integer_product(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $warehouse = $this->defaultWarehouse();
+        [$product] = $this->productWithPresentations(['allows_decimal' => false]);
+        $stock = $this->stock($warehouse, $product, '10');
+
+        $this->actingAs($supervisor)
+            ->put(route('inventory-stocks.update', $stock), ['reorder_point' => '2.5'])
+            ->assertSessionHasErrors([
+                'reorder_point' => 'Este producto solo admite cantidades enteras.',
+            ]);
+
+        $this->assertSame('0.000000', $stock->refresh()->reorder_point);
+
+        $this->actingAs($supervisor)
+            ->put(route('inventory-stocks.update', $stock), ['reorder_point' => '4'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('4.000000', $stock->refresh()->reorder_point);
+    }
+
+    public function test_quick_replenishment_requires_detailed_entry_for_lot_tracked_product(): void
+    {
+        $bodeguero = User::factory()->create();
+        $warehouse = $this->defaultWarehouse();
+        [$product] = $this->productWithPresentations(['tracks_lots' => true]);
+        $stock = $this->stock($warehouse, $product, '10');
+
+        $this->actingAs($bodeguero)->get(route('inventory.index'))
+            ->assertOk()
+            ->assertSee('Entrada detallada')
+            ->assertDontSee(route('inventory-stocks.replenishments.store', $stock), false);
+
+        $this->actingAs($bodeguero)
+            ->post(route('inventory-stocks.replenishments.store', $stock), ['quantity' => '5'])
+            ->assertSessionHasErrors([
+                'quantity' => 'Este producto requiere una entrada detallada para registrar lote o vencimiento.',
+            ]);
+
+        $this->assertSame('10.000000', $stock->refresh()->quantity_on_hand);
+        $this->assertDatabaseCount('inventory_documents', 0);
+        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_preventista_cannot_use_quick_replenishment(): void
+    {
+        $preventista = User::factory()->preventista()->create();
+        $warehouse = $this->defaultWarehouse();
+        [$product] = $this->productWithPresentations();
+        $stock = $this->stock($warehouse, $product, '10');
+
+        $this->actingAs($preventista)
+            ->post(route('inventory-stocks.replenishments.store', $stock), ['quantity' => '5'])
+            ->assertForbidden();
+
+        $this->assertSame('10.000000', $stock->refresh()->quantity_on_hand);
+        $this->assertDatabaseCount('inventory_documents', 0);
+        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
     private function defaultWarehouse(): Warehouse
     {
         return Warehouse::query()->where('is_default', true)->sole();

@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\CompanyProfile;
+use App\Models\CustomerAccountEntry;
 use App\Models\DeliveryRun;
 use App\Models\InventoryCount;
 use App\Models\InventoryDocument;
@@ -11,6 +13,7 @@ use App\Models\SalesRoute;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Warehouse;
+use App\Policies\CustomerAccountEntryPolicy;
 use App\Policies\DeliveryRunPolicy;
 use App\Policies\InventoryCountPolicy;
 use App\Policies\InventoryDocumentPolicy;
@@ -24,9 +27,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\View\View as ViewContract;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -48,6 +53,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('access-panel', fn (User $user): bool => $user->canAccessPanel());
         Gate::define('manage-catalog', fn (User $user): bool => $user->canManageCatalog());
         Gate::define('manage-customers', fn (User $user): bool => $user->canManageCustomers());
+        Gate::define('view-customer-credit', fn (User $user): bool => $user->canViewCustomerCredit());
+        Gate::define('configure-customer-credit', fn (User $user): bool => $user->canConfigureCustomerCredit());
+        Gate::define('record-customer-payments', fn (User $user): bool => $user->canRecordCustomerPayments());
+        Gate::define('reverse-customer-payments', fn (User $user): bool => $user->canReverseCustomerPayments());
         Gate::define('view-routes', fn (User $user): bool => $user->canViewRoutes());
         Gate::define('manage-routes', fn (User $user): bool => $user->canManageRoutes());
         Gate::define('view-orders', fn (User $user): bool => $user->canViewOrders());
@@ -57,13 +66,16 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('adjust-inventory', fn (User $user): bool => $user->canAdjustInventory());
         Gate::define('configure-inventory', fn (User $user): bool => $user->canConfigureInventory());
         Gate::define('view-deliveries', fn (User $user): bool => $user->canViewDeliveries());
+        Gate::define('view-route-reports', fn (User $user): bool => $user->canViewRouteReports());
         Gate::define('manage-deliveries', fn (User $user): bool => $user->canManageDeliveries());
         Gate::define('prepare-deliveries', fn (User $user): bool => $user->canPrepareDeliveries());
         Gate::define('execute-deliveries', fn (User $user): bool => $user->canExecuteDeliveries());
         Gate::define('settle-deliveries', fn (User $user): bool => $user->canSettleDeliveries());
         Gate::define('manage-vehicles', fn (User $user): bool => $user->canManageVehicles());
         Gate::define('manage-users', fn (User $user): bool => $user->canManageUsers());
+        Gate::define('manage-company-profile', fn (User $user): bool => $user->canManageCompanyProfile());
         Gate::policy(SalesRoute::class, SalesRoutePolicy::class);
+        Gate::policy(CustomerAccountEntry::class, CustomerAccountEntryPolicy::class);
         Gate::policy(Order::class, OrderPolicy::class);
         Gate::policy(Warehouse::class, WarehousePolicy::class);
         Gate::policy(InventoryStock::class, InventoryStockPolicy::class);
@@ -92,6 +104,20 @@ class AppServiceProvider extends ServiceProvider
                 : 'user:'.$request->user()->getAuthIdentifier();
 
             return Limit::perMinute(120)->by($key);
+        });
+
+        View::composer('layouts.app', function (ViewContract $view): void {
+            $view->with('companyProfile', CompanyProfile::query()->findOrFail(CompanyProfile::SINGLETON_ID));
+        });
+
+        View::composer('layouts.app', function (ViewContract $view): void {
+            /** @var User|null $user */
+            $user = auth()->user();
+
+            $view->with('notificationSummary', $user === null ? null : [
+                'unread_count' => $user->unreadNotifications()->count(),
+                'notifications' => $user->notifications()->latest()->limit(8)->get(),
+            ]);
         });
     }
 }

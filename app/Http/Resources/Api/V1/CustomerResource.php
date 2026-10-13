@@ -24,6 +24,20 @@ class CustomerResource extends JsonResource
             'longitude' => $this->longitude,
             'notes' => $this->notes,
             'is_active' => $this->is_active,
+            'outstanding_balance' => $this->when(
+                array_key_exists('outstanding_balance', $this->getAttributes()),
+                $this->outstanding_balance,
+            ),
+            'credit_profile' => $this->when(
+                $this->relationLoaded('creditProfile'),
+                fn (): ?array => $this->creditProfile === null ? null : [
+                    'status' => $this->creditProfile->status->value,
+                    'status_label' => $this->creditProfile->status->label(),
+                    'credit_limit' => $this->creditProfile->credit_limit,
+                    'term_days' => $this->creditProfile->term_days,
+                    'grace_days' => $this->creditProfile->grace_days,
+                ],
+            ),
             'route_stops_count' => $this->whenCounted('routeStops'),
             'route_stops' => RouteStopResource::collection($this->whenLoaded('routeStops')),
             'created_at' => $this->created_at?->toISOString(),

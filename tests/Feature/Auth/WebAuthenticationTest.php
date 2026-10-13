@@ -74,7 +74,7 @@ class WebAuthenticationTest extends TestCase
         ]);
     }
 
-    public function test_repartidor_cannot_enter_catalog_panel(): void
+    public function test_active_repartidor_can_sign_in_to_delivery_panel(): void
     {
         $user = User::factory()->repartidor()->create(['password' => 'secret-123']);
 
@@ -83,11 +83,15 @@ class WebAuthenticationTest extends TestCase
             'password' => 'secret-123',
         ]);
 
-        $response->assertSessionHasErrors('email');
-        $this->assertGuest();
+        $response->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
+        $this->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee(route('delivery-runs.index'), false)
+            ->assertDontSee(route('products.index'), false);
         $this->assertDatabaseHas('security_audit_logs', [
             'user_id' => $user->id,
-            'event' => SecurityEvent::LoginDenied->value,
+            'event' => SecurityEvent::LoginSucceeded->value,
             'subject_id' => (string) $user->id,
         ]);
     }

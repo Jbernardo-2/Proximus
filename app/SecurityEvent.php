@@ -12,4 +12,5 @@ enum SecurityEvent: string
     case TokenRevoked = 'auth.token_revoked';
     case UserCreated = 'users.created';
     case UserUpdated = 'users.updated';
+    case CompanyProfileUpdated = 'company_profile.updated';
 }

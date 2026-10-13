@@ -27,8 +27,6 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index(['is_active', 'name']);
-            $table->index(['category_id', 'is_active']);
-            $table->index(['brand_id', 'is_active']);
         });
     }
 

@@ -21,7 +21,9 @@
         </nav>
 
         <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            <a class="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm transition hover:-translate-y-0.5" href="#pending-orders"><p class="text-sm font-bold text-red-800">Pedidos sin asignar</p><p class="mt-2 text-4xl font-black text-red-700">{{ number_format($metrics['pending_orders']) }}</p><p class="mt-1 text-xs text-red-800">{{ $currency }} {{ number_format((float) $metrics['pending_total'], 2) }} por despachar</p></a>
+            @can('manage-deliveries')
+                <a class="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm transition hover:-translate-y-0.5" href="#pending-orders"><p class="text-sm font-bold text-red-800">Pedidos sin asignar</p><p class="mt-2 text-4xl font-black text-red-700">{{ number_format($metrics['pending_orders']) }}</p><p class="mt-1 text-xs text-red-800">{{ $currency }} {{ number_format((float) $metrics['pending_total'], 2) }} por despachar</p></a>
+            @endcan
             <article class="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm"><p class="text-sm font-bold text-amber-800">En preparación</p><p class="mt-2 text-4xl font-black text-amber-700">{{ number_format($metrics['preparing']) }}</p><p class="mt-1 text-xs text-amber-800">Bodega trabajando</p></article>
             <article class="rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm"><p class="text-sm font-bold text-sky-800">Listas para salir</p><p class="mt-2 text-4xl font-black text-sky-700">{{ number_format($metrics['loaded']) }}</p><p class="mt-1 text-xs text-sky-800">Esperando iniciar ruta</p></article>
             <article class="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm"><p class="text-sm font-bold text-indigo-800">En ruta</p><p class="mt-2 text-4xl font-black text-indigo-700">{{ number_format($metrics['in_transit']) }}</p><p class="mt-1 text-xs text-indigo-800">Mercancía en tránsito</p></article>
@@ -29,7 +31,8 @@
             <article class="card p-5"><p class="text-sm font-bold text-ink-600">Programadas hoy</p><p class="mt-2 text-4xl font-black text-ink-950">{{ number_format($metrics['today']) }}</p><p class="mt-1 text-xs text-ink-600">{{ number_format($metrics['open']) }} operaciones abiertas</p></article>
         </section>
 
-        <section class="card overflow-hidden" id="pending-orders">
+        @can('manage-deliveries')
+            <section class="card overflow-hidden" id="pending-orders">
             <header class="border-b border-stone-100 bg-ink-950 px-5 py-5 text-white sm:px-7">
                 <div class="flex flex-wrap items-end justify-between gap-4"><div><p class="text-xs font-bold tracking-[0.14em] text-mint-100 uppercase">Plan de despacho</p><h2 class="mt-1 text-xl font-black">Pedidos pendientes y consolidado</h2><p class="mt-1 text-sm text-stone-300">Filtra la carga que quieres preparar; ambos paneles usan exactamente los mismos pedidos.</p></div><span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">{{ $planningWarehouse?->name ?: 'Sin bodega' }}</span></div>
                 <form method="GET" action="{{ route('delivery-runs.index') }}#pending-orders" class="mt-5 grid gap-3 md:grid-cols-4">
@@ -74,7 +77,8 @@
                     <div class="border-t border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><strong>Control seguro:</strong> este consolidado sirve para planificar y preparar. El descuento real ocurre una sola vez al confirmar la carga de una jornada.</div>
                 </section>
             </div>
-        </section>
+            </section>
+        @endcan
 
         <section class="card p-5">
             <form method="GET" action="{{ route('delivery-runs.index') }}" class="grid gap-4 lg:grid-cols-[minmax(14rem,1.4fr)_12rem_10rem_10rem_auto]">

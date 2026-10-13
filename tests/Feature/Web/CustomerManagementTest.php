@@ -2,10 +2,18 @@
 
 namespace Tests\Feature\Web;
 
+use App\CustomerAccountEntryStatus;
+use App\CustomerAccountEntryType;
+use App\CustomerReceivableStatus;
 use App\Models\Customer;
+use App\Models\CustomerAccountEntry;
+use App\Models\CustomerReceivable;
+use App\Models\DeliveryRunOrder;
+use App\Models\Order;
 use App\Models\RouteStop;
 use App\Models\SalesRoute;
 use App\Models\User;
+use App\PaymentMethod;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 
@@ -35,7 +43,7 @@ class CustomerManagementTest extends TestCase
 
         $customer = Customer::query()->sole();
         $response
-            ->assertRedirect(route('customers.show', $customer))
+            ->assertRedirect(route('customers.index'))
             ->assertSessionHas('success', 'Cliente creado correctamente.');
         $this->assertSame('CLI-001', $customer->code);
         $this->assertSame('14.0723000', $customer->latitude);
@@ -52,9 +60,71 @@ class CustomerManagementTest extends TestCase
             ->assertSee('Frente a la escuela');
     }
 
+    public function test_supervisor_can_apply_customer_payment_to_an_open_receivable(): void
+    {
+        $user = User::factory()->supervisor()->create();
+        $customer = Customer::factory()->create();
+        $order = Order::factory()->for($customer)->create();
+        $runOrder = DeliveryRunOrder::factory()->for($order)->create();
+        $receivable = CustomerReceivable::factory()->create([
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'delivery_run_order_id' => $runOrder->id,
+            'original_amount' => '800.0000',
+            'outstanding_amount' => '800.0000',
+            'status' => CustomerReceivableStatus::Open,
+            'created_by' => $user->id,
+        ]);
+        CustomerAccountEntry::factory()->create([
+            'customer_id' => $customer->id,
+            'type' => CustomerAccountEntryType::Sale,
+            'status' => CustomerAccountEntryStatus::Active,
+            'order_id' => $order->id,
+            'delivery_run_order_id' => $runOrder->id,
+            'debit_amount' => '800.0000',
+            'credit_amount' => '0.0000',
+            'created_by' => $user->id,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('customers.payments.store', $customer), [
+            'method' => PaymentMethod::Cash->value,
+            'amount' => '500',
+            'reference' => null,
+            'notes' => 'Abono parcial en tienda.',
+            'allocations' => [[
+                'receivable_id' => $receivable->id,
+                'amount' => '500',
+            ]],
+        ]);
+        $response
+            ->assertSessionHasNoErrors();
+
+        $payment = CustomerAccountEntry::query()
+            ->where('type', CustomerAccountEntryType::CustomerPayment->value)
+            ->sole();
+        $response->assertRedirect(route('customers.payments.receipt.show', [$customer, $payment]));
+        $response->assertSessionHas('success', "Abono {$payment->receipt_number} registrado correctamente.");
+        $this->assertSame('300.0000', $receivable->refresh()->outstanding_amount);
+        $this->assertSame(CustomerReceivableStatus::PartiallyPaid, $receivable->status);
+        $this->assertSame('500.0000', $payment->credit_amount);
+        $this->assertSame(PaymentMethod::Cash, $payment->method);
+        $this->assertDatabaseHas('customer_receivable_allocations', [
+            'customer_receivable_id' => $receivable->id,
+            'customer_account_entry_id' => $payment->id,
+            'amount' => 500,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('customers.show', $customer))
+            ->assertOk()
+            ->assertSee('HNL 300.00')
+            ->assertSee($payment->receipt_number)
+            ->assertSee('Abono parcial en tienda.');
+    }
+
     public function test_customer_form_offers_current_location_map_and_manual_fallback(): void
     {
-        $user = User::factory()->preventista()->create();
+        $user = User::factory()->supervisor()->create();
 
         $this->actingAs($user)
             ->get(route('customers.create'))
@@ -63,6 +133,36 @@ class CustomerManagementTest extends TestCase
             ->assertSee('data-location-map', false)
             ->assertSee('data-location-latitude', false)
             ->assertSee('Ver o escribir coordenadas manualmente');
+    }
+
+    public function test_customer_payment_cannot_be_applied_to_another_customers_debt(): void
+    {
+        $user = User::factory()->supervisor()->create();
+        $customer = Customer::factory()->create();
+        $otherCustomer = Customer::factory()->create();
+        $otherOrder = Order::factory()->for($otherCustomer)->create();
+        $otherRunOrder = DeliveryRunOrder::factory()->for($otherOrder)->create();
+        $otherReceivable = CustomerReceivable::factory()->create([
+            'customer_id' => $otherCustomer->id,
+            'order_id' => $otherOrder->id,
+            'delivery_run_order_id' => $otherRunOrder->id,
+            'created_by' => $user->id,
+        ]);
+
+        $this->actingAs($user)->post(route('customers.payments.store', $customer), [
+            'method' => PaymentMethod::Cash->value,
+            'amount' => '25',
+            'allocations' => [[
+                'receivable_id' => $otherReceivable->id,
+                'amount' => '25',
+            ]],
+        ])->assertSessionHasErrors('allocations.0.receivable_id');
+
+        $this->assertDatabaseMissing('customer_account_entries', [
+            'customer_id' => $customer->id,
+            'type' => CustomerAccountEntryType::CustomerPayment->value,
+        ]);
+        $this->assertSame('100.0000', $otherReceivable->refresh()->outstanding_amount);
     }
 
     public function test_customer_creation_returns_validation_messages_for_missing_identity_and_location(): void
@@ -112,7 +212,7 @@ class CustomerManagementTest extends TestCase
         $this->actingAs($user)
             ->delete(route('customers.destroy', $customer))
             ->assertRedirect()
-            ->assertSessionHas('error', 'No se puede eliminar un cliente asignado a rutas. Puedes desactivarlo o retirar primero sus visitas.');
+            ->assertSessionHas('error', 'No se puede eliminar un cliente con rutas, pedidos o historial financiero. Desactívalo para conservar la trazabilidad.');
 
         $this->assertModelExists($customer);
     }

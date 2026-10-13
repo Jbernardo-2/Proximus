@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\CustomerReceivableStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
@@ -22,7 +23,14 @@ class CustomerController extends Controller
         $status = $request->string('status')->toString();
         $businessType = $request->string('business_type')->trim()->toString();
         $customers = Customer::query()
+            ->with('creditProfile')
             ->withCount(['routeStops' => fn ($query) => $query->visibleTo($user)])
+            ->withSum([
+                'receivables as outstanding_balance' => fn ($query) => $query->whereIn('status', [
+                    CustomerReceivableStatus::Open->value,
+                    CustomerReceivableStatus::PartiallyPaid->value,
+                ]),
+            ], 'outstanding_amount')
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder->where('business_name', 'like', "%{$search}%")
@@ -57,6 +65,7 @@ class CustomerController extends Controller
         $user = $request->user();
 
         return new CustomerResource($customer->load([
+            'creditProfile',
             'routeStops' => fn ($query) => $query
                 ->with('salesRoute')
                 ->visibleTo($user)

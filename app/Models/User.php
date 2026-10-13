@@ -64,9 +64,39 @@ class User extends Authenticatable
         return $this->is_active && $this->role->canManageUsers();
     }
 
+    public function canManageCompanyProfile(): bool
+    {
+        return $this->is_active && $this->role->canManageCompanyProfile();
+    }
+
     public function canManageCustomers(): bool
     {
         return $this->is_active && $this->role->canManageCustomers();
+    }
+
+    public function canViewCustomerCredit(): bool
+    {
+        return $this->is_active && $this->role->canViewCustomerCredit();
+    }
+
+    public function canConfigureCustomerCredit(): bool
+    {
+        return $this->is_active && $this->role->canConfigureCustomerCredit();
+    }
+
+    public function canRecordCustomerPayments(): bool
+    {
+        return $this->is_active && $this->role->canRecordCustomerPayments();
+    }
+
+    public function canReverseCustomerPayments(): bool
+    {
+        return $this->is_active && $this->role->canReverseCustomerPayments();
+    }
+
+    public function canOverrideCustomerCredit(): bool
+    {
+        return $this->is_active && $this->role->canOverrideCustomerCredit();
     }
 
     public function canManageRoutes(): bool
@@ -122,6 +152,11 @@ class User extends Authenticatable
     public function canViewDeliveries(): bool
     {
         return $this->is_active && $this->role->canViewDeliveries();
+    }
+
+    public function canViewRouteReports(): bool
+    {
+        return $this->is_active && $this->role->canViewRouteReports();
     }
 
     public function canManageDeliveries(): bool

@@ -16,6 +16,7 @@ use App\DeliveryOutcomeReason;
 use App\DeliveryRunStatus;
 use App\InventoryMovementType;
 use App\InventoryReservationStatus;
+use App\Models\CustomerCreditProfile;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunOrder;
 use App\Models\InventoryReservation;
@@ -30,8 +31,8 @@ use App\Models\Vehicle;
 use App\Models\Warehouse;
 use App\OrderPriceSource;
 use App\OrderStatus;
-use App\PaymentMethod;
 use App\PaymentTerm;
+use App\SettlementMethod;
 use App\UserRole;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
@@ -50,11 +51,91 @@ class DeliveryOperationsTest extends TestCase
         $this->actingAs($supervisor)->get(route('delivery-runs.index'))->assertOk();
         $this->actingAs($supervisor)->get(route('delivery-runs.create'))->assertOk();
         $this->actingAs($bodeguero)->get(route('delivery-runs.index'))->assertOk();
-        $this->actingAs($bodeguero)->get(route('delivery-runs.create'))->assertForbidden();
+        $this->actingAs($bodeguero)->get(route('delivery-runs.create'))->assertOk();
         $this->actingAs($preventista)->get(route('delivery-runs.index'))->assertForbidden();
-        $this->actingAs($repartidor)->get(route('delivery-runs.index'))->assertForbidden();
+        $this->actingAs($repartidor)->get(route('delivery-runs.index'))->assertOk();
         $this->actingAs($bodeguero)->get(route('vehicles.index'))->assertForbidden();
         $this->actingAs($supervisor)->get(route('vehicles.index'))->assertOk();
+    }
+
+    public function test_repartidor_only_sees_assigned_runs_without_dispatch_planning(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $driver = User::factory()->repartidor()->create();
+        $otherDriver = User::factory()->repartidor()->create();
+        $warehouse = Warehouse::query()->where('is_default', true)->sole();
+        $ownRun = app(CreateDeliveryRunAction::class)->handle([
+            'warehouse_id' => $warehouse->id,
+            'driver_id' => $driver->id,
+            'vehicle_id' => null,
+            'scheduled_date' => now()->toDateString(),
+            'client_reference' => null,
+            'notes' => null,
+        ], $supervisor);
+        $otherRun = app(CreateDeliveryRunAction::class)->handle([
+            'warehouse_id' => $warehouse->id,
+            'driver_id' => $otherDriver->id,
+            'vehicle_id' => null,
+            'scheduled_date' => now()->addDay()->toDateString(),
+            'client_reference' => null,
+            'notes' => null,
+        ], $supervisor);
+
+        $this->actingAs($driver)
+            ->get(route('delivery-runs.index'))
+            ->assertOk()
+            ->assertSee($ownRun->run_number)
+            ->assertDontSee($otherRun->run_number)
+            ->assertDontSee('Pedidos sin asignar')
+            ->assertDontSee('Plan de despacho')
+            ->assertDontSee('Nueva jornada');
+        $this->actingAs($driver)->get(route('delivery-runs.show', $ownRun))->assertOk();
+        $this->actingAs($driver)->get(route('delivery-runs.show', $otherRun))->assertForbidden();
+    }
+
+    public function test_repartidor_dashboard_summarizes_progress_next_stop_and_achievements(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $driver = User::factory()->repartidor()->create();
+        $run = DeliveryRun::factory()->create([
+            'driver_id' => $driver->id,
+            'driver_name' => $driver->name,
+            'created_by' => $supervisor->id,
+            'status' => DeliveryRunStatus::InTransit,
+            'delivered_total' => '120.0000',
+            'collected_total' => '80.0000',
+            'credit_total' => '40.0000',
+        ]);
+        $completedOrder = Order::factory()->create(['customer_name' => 'Pulpería Entregada']);
+        $nextOrder = Order::factory()->create([
+            'customer_name' => 'Mercadito Siguiente',
+            'customer_address' => 'Barrio El Centro',
+        ]);
+        DeliveryRunOrder::factory()->create([
+            'delivery_run_id' => $run->id,
+            'order_id' => $completedOrder->id,
+            'visit_order' => 1,
+            'status' => DeliveryOrderStatus::Delivered,
+            'completed_at' => now(),
+            'completed_by' => $driver->id,
+        ]);
+        DeliveryRunOrder::factory()->create([
+            'delivery_run_id' => $run->id,
+            'order_id' => $nextOrder->id,
+            'visit_order' => 2,
+            'status' => DeliveryOrderStatus::Loaded,
+        ]);
+
+        $this->actingAs($driver)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Panel del repartidor')
+            ->assertSee('1/2')
+            ->assertSee('50%')
+            ->assertSee('Mercadito Siguiente')
+            ->assertSee('Primera entrega')
+            ->assertSee('data-run-filter="completed"', false)
+            ->assertSee(route('delivery-runs.show', $run), false);
     }
 
     public function test_vehicle_data_is_normalized_and_an_open_run_prevents_deactivation(): void
@@ -136,7 +217,7 @@ class DeliveryOperationsTest extends TestCase
         $order = $context['order'];
         $stock = $context['lines'][0]['stock'];
 
-        $this->actingAs($supervisor)->post(route('delivery-runs.store'), [
+        $this->actingAs($bodeguero)->post(route('delivery-runs.store'), [
             'warehouse_id' => $context['warehouse']->id,
             'driver_id' => $driver->id,
             'vehicle_id' => null,
@@ -146,7 +227,7 @@ class DeliveryOperationsTest extends TestCase
         ])->assertRedirect();
         $run = DeliveryRun::query()->sole();
 
-        $this->actingAs($supervisor)->post(route('delivery-runs.orders.store', $run), [
+        $this->actingAs($bodeguero)->post(route('delivery-runs.orders.store', $run), [
             'order_id' => $order->id,
             'visit_order' => 3,
         ])->assertRedirect(route('delivery-runs.show', $run));
@@ -184,12 +265,19 @@ class DeliveryOperationsTest extends TestCase
             'quantity_reserved_delta' => -2,
         ]);
 
-        $this->actingAs($supervisor)
+        $this->actingAs($driver)
             ->post(route('delivery-runs.depart', $run))
             ->assertRedirect(route('delivery-runs.show', $run));
         $this->assertSame(OrderStatus::InTransit, $order->refresh()->status);
 
-        $this->actingAs($supervisor)->put(route('delivery-runs.orders.outcome', [$run, $runOrder]), [
+        $deliveryForm = $this->actingAs($driver)->get(route('delivery-runs.show', $run));
+        $deliveryForm
+            ->assertOk()
+            ->assertSee('data-pending-stop="'.$runOrder->id.'"', false)
+            ->assertSee('value="0" data-delivery-quantity', false)
+            ->assertDontSee('value="0.000000" data-delivery-quantity', false);
+
+        $this->actingAs($driver)->put(route('delivery-runs.orders.outcome', [$run, $runOrder]), [
             'receiver_name' => 'María López',
             'outcome_reason' => DeliveryOutcomeReason::DamagedGoods->value,
             'outcome_notes' => 'Una unidad regresó y otra llegó dañada.',
@@ -201,32 +289,47 @@ class DeliveryOperationsTest extends TestCase
                 'damaged_quantity' => '1',
                 'missing_quantity' => '0',
             ]],
-        ])->assertRedirect(route('delivery-runs.show', $run));
+        ])->assertRedirect(route('delivery-runs.show', $run).'#stop-'.$runOrder->id);
+
+        $this->assertSame(DeliveryRunStatus::InTransit, $run->refresh()->status);
+        $this->assertSame(DeliveryOrderStatus::AwaitingPayment, $runOrder->refresh()->status);
+        $this->assertSame(DeliveryOrderStatus::PartiallyDelivered, $runOrder->outcome_status);
+        $this->assertSame(OrderStatus::InTransit, $order->refresh()->status);
+        $this->assertSame('60.0000', $runOrder->delivered_total);
+        $this->actingAs($driver)->get(route('delivery-runs.show', $run))
+            ->assertOk()
+            ->assertSee('data-pending-stop="'.$runOrder->id.'"', false)
+            ->assertDontSee('data-completed-stop="'.$runOrder->id.'"', false)
+            ->assertSee('Distribución del pago')
+            ->assertSee('Crédito');
+
+        $this->actingAs($driver)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
+            'allocations' => [
+                [
+                    'method' => SettlementMethod::Cash->value,
+                    'amount' => '40',
+                    'reference' => null,
+                ],
+                [
+                    'method' => SettlementMethod::BankTransfer->value,
+                    'amount' => '20',
+                    'reference' => 'TRX-7788',
+                ],
+            ],
+            'credit_reason' => null,
+        ])->assertRedirect(route('delivery-runs.show', $run).'#delivery-progress');
 
         $this->assertSame(DeliveryRunStatus::AwaitingSettlement, $run->refresh()->status);
         $this->assertSame(DeliveryOrderStatus::PartiallyDelivered, $runOrder->refresh()->status);
         $this->assertSame(OrderStatus::PartiallyDelivered, $order->refresh()->status);
-        $this->assertSame('60.0000', $runOrder->delivered_total);
-
-        $this->actingAs($supervisor)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
-            'client_reference' => 'PAY-CASH-001',
-            'method' => PaymentMethod::Cash->value,
-            'amount' => '40',
-            'reference' => null,
-            'notes' => null,
-        ])->assertRedirect(route('delivery-runs.show', $run));
-        $this->actingAs($supervisor)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
-            'client_reference' => 'PAY-TRANSFER-001',
-            'method' => PaymentMethod::BankTransfer->value,
-            'amount' => '20',
-            'reference' => 'TRX-7788',
-            'notes' => null,
-        ])->assertRedirect(route('delivery-runs.show', $run));
-
         $this->assertSame('60.0000', $run->refresh()->collected_total);
         $this->assertSame('40.0000', $run->cash_expected);
         $this->assertSame('20.0000', $run->transfer_total);
         $this->assertSame('0.0000', $run->credit_total);
+        $this->assertDatabaseCount('delivery_settlements', 1);
+        $this->assertDatabaseCount('delivery_settlement_lines', 2);
+        $this->assertDatabaseCount('customer_account_entries', 3);
+        $this->assertDatabaseCount('customer_receivables', 0);
         $this->actingAs($supervisor)->get(route('delivery-runs.show', $run))
             ->assertOk()
             ->assertSee('Transferencia bancaria')
@@ -335,6 +438,145 @@ class DeliveryOperationsTest extends TestCase
         $this->assertSame('0.000000', $runItem->refresh()->delivered_quantity);
     }
 
+    public function test_whole_unit_delivery_rejects_decimal_quantities(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $driver = User::factory()->repartidor()->create();
+        $context = $this->confirmedOrder([
+            ['quantity' => '5', 'unit_price' => '10', 'on_hand' => '20'],
+        ]);
+        [$run, $runOrder] = $this->loadedRun($context['order'], $supervisor, $driver);
+        app(DepartDeliveryRunAction::class)->handle($run, $driver);
+        $runItem = $runOrder->items()->sole();
+
+        $this->actingAs($driver)->put(route('delivery-runs.orders.outcome', [$run, $runOrder]), [
+            'receiver_name' => 'Cliente',
+            'outcome_reason' => DeliveryOutcomeReason::CustomerRejected->value,
+            'items' => [[
+                'id' => $runItem->id,
+                'delivered_quantity' => '4.5',
+                'returned_quantity' => '0.5',
+                'damaged_quantity' => '0',
+                'missing_quantity' => '0',
+            ]],
+        ])->assertSessionHasErrors('items');
+
+        $this->assertSame(DeliveryOrderStatus::Loaded, $runOrder->refresh()->status);
+        $this->assertSame('0.000000', $runItem->refresh()->delivered_quantity);
+    }
+
+    public function test_combined_payment_is_atomic_and_can_leave_an_explained_credit_balance(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $driver = User::factory()->repartidor()->create();
+        $context = $this->confirmedOrder([
+            ['quantity' => '5', 'unit_price' => '10', 'on_hand' => '20'],
+        ]);
+        [$run, $runOrder] = $this->loadedRun($context['order'], $supervisor, $driver);
+        app(DepartDeliveryRunAction::class)->handle($run, $driver);
+        $runItem = $runOrder->items()->sole();
+        app(CompleteDeliveryStopAction::class)->handle($run, $runOrder, [
+            'receiver_name' => 'Cliente',
+        ], [[
+            'id' => $runItem->id,
+            'delivered_quantity' => '5',
+            'returned_quantity' => '0',
+            'damaged_quantity' => '0',
+            'missing_quantity' => '0',
+        ]], $driver);
+
+        $this->actingAs($driver)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
+            'allocations' => [
+                ['method' => SettlementMethod::Cash->value, 'amount' => '10', 'reference' => null],
+                ['method' => SettlementMethod::BankTransfer->value, 'amount' => '10', 'reference' => null],
+                ['method' => SettlementMethod::Credit->value, 'amount' => '30', 'reference' => null],
+            ],
+            'credit_reason' => 'Saldo autorizado.',
+        ])->assertSessionHasErrors('allocations.1.reference');
+        $this->assertDatabaseCount('delivery_payments', 0);
+        $this->assertDatabaseCount('delivery_settlements', 0);
+
+        $this->actingAs($driver)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
+            'allocations' => [
+                ['method' => SettlementMethod::Cash->value, 'amount' => '30', 'reference' => null],
+                ['method' => SettlementMethod::BankTransfer->value, 'amount' => '30', 'reference' => 'TRX-INVALIDA'],
+            ],
+            'credit_reason' => null,
+        ])->assertSessionHasErrors('allocations');
+        $this->assertDatabaseCount('delivery_payments', 0);
+        $this->assertDatabaseCount('delivery_settlements', 0);
+
+        $this->actingAs($driver)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
+            'allocations' => [
+                ['method' => SettlementMethod::Cash->value, 'amount' => '10', 'reference' => null],
+                ['method' => SettlementMethod::BankTransfer->value, 'amount' => '15', 'reference' => 'TRX-2026-001'],
+                ['method' => SettlementMethod::Credit->value, 'amount' => '25', 'reference' => null],
+            ],
+            'credit_reason' => 'Cliente pagará el saldo en la próxima visita.',
+        ])->assertRedirect(route('delivery-runs.show', $run).'#delivery-progress');
+
+        $this->assertDatabaseCount('delivery_payments', 2);
+        $this->assertDatabaseCount('delivery_settlement_lines', 3);
+        $this->assertDatabaseCount('customer_receivables', 1);
+        $this->assertDatabaseCount('customer_account_entries', 3);
+        $this->assertSame(DeliveryOrderStatus::Delivered, $runOrder->refresh()->status);
+        $this->assertSame('25.0000', $runOrder->refresh()->collected_total);
+        $this->assertSame('25.0000', $runOrder->balance_due);
+        $this->assertSame('Cliente pagará el saldo en la próxima visita.', $runOrder->credit_reason);
+        $this->assertSame('10.0000', $run->refresh()->cash_expected);
+        $this->assertSame('15.0000', $run->transfer_total);
+        $this->assertSame('25.0000', $run->credit_total);
+    }
+
+    public function test_confirming_payment_clears_the_stop_and_suggests_the_next_delivery(): void
+    {
+        $driver = User::factory()->repartidor()->create();
+        $supervisor = User::factory()->supervisor()->create();
+        $run = DeliveryRun::factory()->create([
+            'driver_id' => $driver->id,
+            'driver_name' => $driver->name,
+            'created_by' => $supervisor->id,
+            'status' => DeliveryRunStatus::InTransit,
+        ]);
+        $completedOrder = Order::factory()->create(['status' => OrderStatus::InTransit]);
+        $nextOrder = Order::factory()->create(['status' => OrderStatus::InTransit]);
+        $currentStop = DeliveryRunOrder::factory()->create([
+            'delivery_run_id' => $run->id,
+            'order_id' => $completedOrder->id,
+            'visit_order' => 1,
+            'status' => DeliveryOrderStatus::AwaitingPayment,
+            'outcome_status' => DeliveryOrderStatus::Delivered,
+            'delivered_total' => '50.0000',
+            'balance_due' => '50.0000',
+            'outcome_recorded_at' => now(),
+            'outcome_recorded_by' => $driver->id,
+        ]);
+        $nextStop = DeliveryRunOrder::factory()->create([
+            'delivery_run_id' => $run->id,
+            'order_id' => $nextOrder->id,
+            'visit_order' => 2,
+            'status' => DeliveryOrderStatus::Loaded,
+        ]);
+
+        $response = $this->actingAs($driver)->post(
+            route('delivery-runs.orders.payments.store', [$run, $currentStop]),
+            [
+                'allocations' => [[
+                    'method' => SettlementMethod::Cash->value,
+                    'amount' => '50',
+                    'reference' => null,
+                ]],
+                'credit_reason' => null,
+            ],
+        );
+
+        $response
+            ->assertRedirect(route('delivery-runs.show', $run).'#stop-'.$nextStop->id)
+            ->assertSessionHas('success', 'Cobro registrado. Siguiente entrega: parada #2.');
+        $this->assertSame(DeliveryOrderStatus::Delivered, $currentStop->refresh()->status);
+        $this->assertSame(DeliveryRunStatus::InTransit, $run->refresh()->status);
+    }
+
     public function test_cash_credit_and_cash_difference_require_explicit_explanations(): void
     {
         $supervisor = User::factory()->supervisor()->create();
@@ -355,22 +597,25 @@ class DeliveryOperationsTest extends TestCase
             'missing_quantity' => '0',
         ]], $supervisor);
 
-        $this->actingAs($supervisor)->post(route('delivery-runs.settle', $run), [
-            'cash_declared' => '0',
-            'settlement_notes' => null,
-        ])->assertSessionHasErrors('credit');
-        $this->assertSame(DeliveryRunStatus::AwaitingSettlement, $run->refresh()->status);
+        $this->actingAs($supervisor)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
+            'allocations' => [[
+                'method' => SettlementMethod::Credit->value,
+                'amount' => '50',
+                'reference' => null,
+            ]],
+            'credit_reason' => null,
+        ])->assertSessionHasErrors('credit_reason');
+        $this->assertSame(DeliveryRunStatus::InTransit, $run->refresh()->status);
+        $this->assertSame(DeliveryOrderStatus::AwaitingPayment, $runOrder->refresh()->status);
 
-        app(CompleteDeliveryStopAction::class)->handle($run, $runOrder, [
-            'receiver_name' => 'Cliente',
+        $this->actingAs($supervisor)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
+            'allocations' => [[
+                'method' => SettlementMethod::Credit->value,
+                'amount' => '50',
+                'reference' => null,
+            ]],
             'credit_reason' => 'Crédito excepcional autorizado por supervisión.',
-        ], [[
-            'id' => $runItem->id,
-            'delivered_quantity' => '5',
-            'returned_quantity' => '0',
-            'damaged_quantity' => '0',
-            'missing_quantity' => '0',
-        ]], $supervisor);
+        ])->assertRedirect();
         app(SettleDeliveryRunAction::class)->handle($run, [
             'cash_declared' => '0',
             'settlement_notes' => null,
@@ -395,8 +640,12 @@ class DeliveryOperationsTest extends TestCase
             'missing_quantity' => '0',
         ]], $supervisor);
         $this->actingAs($supervisor)->post(route('delivery-runs.orders.payments.store', [$cashRun, $cashRunOrder]), [
-            'method' => PaymentMethod::Cash->value,
-            'amount' => '20',
+            'allocations' => [[
+                'method' => SettlementMethod::Cash->value,
+                'amount' => '20',
+                'reference' => null,
+            ]],
+            'credit_reason' => null,
         ])->assertRedirect();
 
         $this->actingAs($supervisor)->post(route('delivery-runs.settle', $cashRun), [
@@ -410,6 +659,66 @@ class DeliveryOperationsTest extends TestCase
 
         $this->assertSame(DeliveryRunStatus::Settled, $cashRun->refresh()->status);
         $this->assertSame('-1.0000', $cashRun->cash_difference);
+    }
+
+    public function test_final_settlement_collects_and_saves_a_justification_for_an_unexplained_cash_balance(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $driver = User::factory()->repartidor()->create();
+        $context = $this->confirmedOrder([
+            ['quantity' => '5', 'unit_price' => '10', 'on_hand' => '20'],
+        ]);
+        [$run, $runOrder] = $this->loadedRun($context['order'], $supervisor, $driver);
+        app(DepartDeliveryRunAction::class)->handle($run, $driver);
+        $runItem = $runOrder->items()->sole();
+        app(CompleteDeliveryStopAction::class)->handle($run, $runOrder, [
+            'receiver_name' => 'Cliente',
+        ], [[
+            'id' => $runItem->id,
+            'delivered_quantity' => '5',
+            'returned_quantity' => '0',
+            'damaged_quantity' => '0',
+            'missing_quantity' => '0',
+        ]], $driver);
+
+        $this->actingAs($supervisor)->post(route('delivery-runs.orders.payments.store', [$run, $runOrder]), [
+            'allocations' => [
+                ['method' => SettlementMethod::Cash->value, 'amount' => '20', 'reference' => null],
+                ['method' => SettlementMethod::Credit->value, 'amount' => '30', 'reference' => null],
+            ],
+            'credit_reason' => 'Saldo acordado para la próxima visita.',
+        ])->assertRedirect();
+
+        $runOrder->refresh()->forceFill(['credit_reason' => null])->save();
+
+        $this->actingAs($supervisor)->get(route('delivery-runs.show', $run))
+            ->assertOk()
+            ->assertSee('Justifica los saldos pendientes')
+            ->assertSee('name="credit_reasons['.$runOrder->id.']"', false)
+            ->assertSee('data-app-dialog', false);
+
+        $this->actingAs($supervisor)->post(route('delivery-runs.settle', $run), [
+            'cash_declared' => '20',
+            'settlement_notes' => null,
+        ])->assertRedirect(route('delivery-runs.show', $run))
+            ->assertSessionHasErrors('credit_reasons.'.$runOrder->id);
+
+        $this->assertSame(DeliveryRunStatus::AwaitingSettlement, $run->refresh()->status);
+        $this->assertNull($runOrder->refresh()->credit_reason);
+
+        $this->actingAs($supervisor)->post(route('delivery-runs.settle', $run), [
+            'cash_declared' => '20',
+            'settlement_notes' => null,
+            'credit_reasons' => [
+                $runOrder->id => 'El cliente completará el saldo en su próxima visita.',
+            ],
+        ])->assertRedirect(route('delivery-runs.show', $run));
+
+        $this->assertSame(DeliveryRunStatus::Settled, $run->refresh()->status);
+        $this->assertSame(
+            'El cliente completará el saldo en su próxima visita.',
+            $runOrder->refresh()->credit_reason,
+        );
     }
 
     public function test_cancelling_before_load_restores_orders_without_releasing_reservations(): void
@@ -616,6 +925,11 @@ class DeliveryOperationsTest extends TestCase
             'salesperson_name' => $salesperson->name,
             'payment_term' => $paymentTerm,
             'status' => OrderStatus::Draft,
+        ]);
+        CustomerCreditProfile::factory()->create([
+            'customer_id' => $order->customer_id,
+            'credit_limit' => '100000.0000',
+            'term_days' => 30,
         ]);
         $lines = [];
 

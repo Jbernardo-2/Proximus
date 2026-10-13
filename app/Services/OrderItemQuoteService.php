@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\InventoryStock;
 use App\Models\Order;
 use App\Models\ProductPresentation;
 
@@ -18,6 +19,17 @@ class OrderItemQuoteService
         $presentation->loadMissing(['product.baseUnit', 'product.presentations.priceTiers', 'priceTiers']);
         $price = $this->priceResolver->resolve($presentation, $quantity, $order->order_date);
         $baseQuantity = bcmul($quantity, $presentation->conversion_factor, 6);
+        $availableQuantity = InventoryStock::query()
+            ->where('warehouse_id', $order->warehouse_id)
+            ->where('product_id', $presentation->product_id)
+            ->first()
+            ?->availableQuantity() ?? '0.000000';
+        $existingOrderQuantity = (string) $order->items()
+            ->where('product_id', $presentation->product_id)
+            ->sum('base_quantity');
+        $orderQuantityAfter = bcadd($existingOrderQuantity, $baseQuantity, 6);
+        $projectedAvailableQuantity = bcsub($availableQuantity, $orderQuantityAfter, 6);
+        $hasShortage = bccomp($projectedAvailableQuantity, '0', 6) < 0;
 
         return [
             'selected' => [
@@ -39,6 +51,18 @@ class OrderItemQuoteService
                 $baseQuantity,
                 $order->order_date,
             ),
+            'stock' => [
+                'available_quantity' => $availableQuantity,
+                'existing_order_quantity' => $existingOrderQuantity,
+                'requested_base_quantity' => $baseQuantity,
+                'order_quantity_after' => $orderQuantityAfter,
+                'projected_available_quantity' => $projectedAvailableQuantity,
+                'shortage_quantity' => $hasShortage
+                    ? bcmul($projectedAvailableQuantity, '-1', 6)
+                    : '0.000000',
+                'has_shortage' => $hasShortage,
+                'base_unit_symbol' => $presentation->product->baseUnit->symbol,
+            ],
         ];
     }
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Web;
 
 use App\Models\Customer;
+use App\Models\InventoryStock;
 use App\Models\MeasurementUnit;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -213,7 +214,8 @@ class OrderManagementTest extends TestCase
         ])->assertRedirect();
 
         $this->actingAs($user)->post(route('orders.confirm', $order))
-            ->assertRedirect(route('orders.show', $order));
+            ->assertRedirect(route('orders.index'))
+            ->assertSessionHas('success', 'Pedido confirmado y enviado a bodega.');
         $this->assertSame(OrderStatus::Confirmed, $order->refresh()->status);
         $this->assertNotNull($order->confirmed_at);
         $this->assertSame($user->id, $order->confirmed_by);
@@ -293,6 +295,40 @@ class OrderManagementTest extends TestCase
             ->assertSee('1</strong> × Caja 24', false)
             ->assertSee('6</strong> × Unidad', false)
             ->assertSee('nunca modifica el pedido automáticamente');
+    }
+
+    public function test_out_of_stock_quote_reports_shortage_and_order_page_shows_confirmation_dialog(): void
+    {
+        $user = User::factory()->preventista()->create();
+        $order = Order::factory()->create([
+            'salesperson_id' => $user->id,
+            'created_by' => $user->id,
+        ]);
+        [$product, $unit] = $this->productWithPresentations();
+        InventoryStock::factory()->create([
+            'warehouse_id' => $order->warehouse_id,
+            'product_id' => $product->id,
+            'quantity_on_hand' => '3.000000',
+            'quantity_reserved' => '5.000000',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('orders.item-quote', [
+                'order' => $order,
+                'product_presentation_id' => $unit->id,
+                'quantity' => '4',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.stock.available_quantity', '-2.000000')
+            ->assertJsonPath('data.stock.projected_available_quantity', '-6.000000')
+            ->assertJsonPath('data.stock.shortage_quantity', '6.000000')
+            ->assertJsonPath('data.stock.has_shortage', true);
+
+        $this->actingAs($user)
+            ->get(route('orders.show', $order))
+            ->assertSee('data-stock-warning-dialog', false)
+            ->assertSee('Cancelar')
+            ->assertSee('Agregar producto de todos modos');
     }
 
     public function test_scoped_binding_returns_404_for_item_from_another_order(): void

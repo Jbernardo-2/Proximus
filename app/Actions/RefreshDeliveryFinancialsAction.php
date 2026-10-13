@@ -2,9 +2,11 @@
 
 namespace App\Actions;
 
+use App\DeliveryOrderStatus;
 use App\DeliveryPaymentStatus;
 use App\Models\DeliveryRun;
 use App\PaymentMethod;
+use App\SettlementMethod;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -14,7 +16,7 @@ class RefreshDeliveryFinancialsAction
     {
         return DB::transaction(function () use ($deliveryRun): DeliveryRun {
             $run = DeliveryRun::query()
-                ->with(['runOrders.order', 'runOrders.payments'])
+                ->with(['runOrders.order', 'runOrders.payments', 'runOrders.settlement.lines'])
                 ->lockForUpdate()
                 ->findOrFail($deliveryRun->id);
             $deliveredTotal = '0.0000';
@@ -37,14 +39,24 @@ class RefreshDeliveryFinancialsAction
                     ]);
                 }
 
-                $balanceDue = bcsub((string) $runOrder->delivered_total, $orderCollected, 4);
+                $settlementCredit = $runOrder->settlement?->lines
+                    ->where('method', SettlementMethod::Credit)
+                    ->reduce(
+                        fn (string $total, $line): string => bcadd($total, (string) $line->amount, 4),
+                        '0.0000',
+                    );
+                $balanceDue = $runOrder->settlement === null
+                    ? bcsub((string) $runOrder->delivered_total, $orderCollected, 4)
+                    : ($settlementCredit ?? '0.0000');
                 $runOrder->forceFill([
                     'collected_total' => $orderCollected,
                     'balance_due' => $balanceDue,
                 ])->save();
                 $deliveredTotal = bcadd($deliveredTotal, (string) $runOrder->delivered_total, 4);
                 $collectedTotal = bcadd($collectedTotal, $orderCollected, 4);
-                $creditTotal = bcadd($creditTotal, $balanceDue, 4);
+                if ($runOrder->settlement !== null || $runOrder->status !== DeliveryOrderStatus::AwaitingPayment) {
+                    $creditTotal = bcadd($creditTotal, $balanceDue, 4);
+                }
 
                 foreach ($activePayments as $payment) {
                     $methodTotals[$payment->method->value] = bcadd(

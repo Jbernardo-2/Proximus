@@ -34,6 +34,12 @@ class VoidDeliveryPaymentAction
             $lockedRunOrder = $run->runOrders()->lockForUpdate()->findOrFail($runOrder->id);
             $lockedPayment = $lockedRunOrder->payments()->lockForUpdate()->findOrFail($payment->id);
 
+            if ($lockedRunOrder->settlement()->exists()) {
+                throw ValidationException::withMessages([
+                    'payment' => ['El pago forma parte de un cierre confirmado. Registra una reversión autorizada en lugar de eliminarlo.'],
+                ]);
+            }
+
             if ($lockedPayment->status !== DeliveryPaymentStatus::Active) {
                 throw ValidationException::withMessages([
                     'payment' => ['El cobro ya está anulado.'],

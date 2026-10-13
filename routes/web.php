@@ -7,12 +7,20 @@ use App\Http\Controllers\CancelInventoryCountController;
 use App\Http\Controllers\CancelInventoryDocumentController;
 use App\Http\Controllers\CancelOrderController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CompleteDeliveryStopController;
 use App\Http\Controllers\ConfirmDeliveryLoadController;
 use App\Http\Controllers\ConfirmOrderController;
+use App\Http\Controllers\CreditPortfolioController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerCreditProfileController;
 use App\Http\Controllers\CustomerLookupController;
+use App\Http\Controllers\CustomerOpeningBalanceController;
+use App\Http\Controllers\CustomerPaymentController;
+use App\Http\Controllers\CustomerPaymentReceiptController;
+use App\Http\Controllers\CustomerPaymentReversalController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeliveryInvoiceController;
 use App\Http\Controllers\DeliveryPaymentController;
 use App\Http\Controllers\DeliveryRunController;
 use App\Http\Controllers\DeliveryRunOrderController;
@@ -25,6 +33,7 @@ use App\Http\Controllers\InventoryDocumentItemController;
 use App\Http\Controllers\InventoryMovementController;
 use App\Http\Controllers\InventoryStockController;
 use App\Http\Controllers\MeasurementUnitController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderConversionSuggestionController;
 use App\Http\Controllers\OrderItemController;
@@ -38,7 +47,9 @@ use App\Http\Controllers\ProductPresentationController;
 use App\Http\Controllers\ProductPresentationLookupController;
 use App\Http\Controllers\ProductSupplierController;
 use App\Http\Controllers\ReopenOrderController;
+use App\Http\Controllers\ReplenishInventoryStockController;
 use App\Http\Controllers\RequeueDeliveryOrderController;
+use App\Http\Controllers\RouteReportController;
 use App\Http\Controllers\RouteStopController;
 use App\Http\Controllers\SalesRouteController;
 use App\Http\Controllers\SettleDeliveryRunController;
@@ -62,9 +73,24 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 
+Route::get('/payment-receipts/{payment}/download', [CustomerPaymentReceiptController::class, 'publicDownload'])
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('payment-receipts.public-download');
+
+Route::get('/delivery-invoices/{runOrder}/download', [DeliveryInvoiceController::class, 'publicDownload'])
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('delivery-invoices.public-download');
+
 Route::get('/dashboard', DashboardController::class)
     ->middleware(['auth', 'can:access-panel'])
     ->name('dashboard');
+
+Route::middleware(['auth', 'can:access-panel'])->prefix('notifications')->name('notifications.')->group(function (): void {
+    Route::get('/', [NotificationController::class, 'index'])->name('index');
+    Route::get('/feed', [NotificationController::class, 'feed'])->middleware('throttle:120,1')->name('feed');
+    Route::post('/read-all', [NotificationController::class, 'readAll'])->name('read-all');
+    Route::post('/{notification}/read', [NotificationController::class, 'read'])->name('read');
+});
 
 Route::middleware(['auth', 'throttle:120,1'])->prefix('lookups')->name('lookups.')->group(function (): void {
     Route::get('/customers', CustomerLookupController::class)->name('customers');
@@ -110,6 +136,31 @@ Route::middleware(['auth', 'can:manage-catalog'])->group(function (): void {
 
 Route::middleware(['auth', 'can:manage-customers'])->group(function (): void {
     Route::resource('customers', CustomerController::class);
+});
+
+Route::middleware(['auth', 'can:view-customer-credit'])->group(function (): void {
+    Route::get('/credits', CreditPortfolioController::class)->name('credits.index');
+    Route::get('/customers/{customer}/payments/{payment}/receipt', [CustomerPaymentReceiptController::class, 'show'])
+        ->name('customers.payments.receipt.show');
+    Route::get('/customers/{customer}/payments/{payment}/receipt/download', [CustomerPaymentReceiptController::class, 'download'])
+        ->name('customers.payments.receipt.download');
+});
+
+Route::middleware(['auth', 'can:configure-customer-credit'])->group(function (): void {
+    Route::put('/customers/{customer}/credit-profile', CustomerCreditProfileController::class)
+        ->name('customers.credit-profile.update');
+    Route::post('/customers/{customer}/opening-balances', CustomerOpeningBalanceController::class)
+        ->name('customers.opening-balances.store');
+});
+
+Route::middleware(['auth', 'can:record-customer-payments'])->group(function (): void {
+    Route::post('/customers/{customer}/payments', [CustomerPaymentController::class, 'store'])
+        ->name('customers.payments.store');
+});
+
+Route::middleware(['auth', 'can:reverse-customer-payments'])->group(function (): void {
+    Route::post('/customers/{customer}/payments/{payment}/reversal', CustomerPaymentReversalController::class)
+        ->name('customers.payments.reverse');
 });
 
 Route::get('/routes/create', [SalesRouteController::class, 'create'])
@@ -201,6 +252,10 @@ Route::middleware(['auth', 'can:access-panel', 'can:view-deliveries'])->group(fu
             ->name('delivery-runs.orders.preparation.update');
         Route::put('/delivery-runs/{deliveryRun}/orders/{runOrder}/outcome', CompleteDeliveryStopController::class)
             ->name('delivery-runs.orders.outcome');
+        Route::get('/delivery-runs/{deliveryRun}/orders/{runOrder}/invoice', [DeliveryInvoiceController::class, 'show'])
+            ->name('delivery-runs.orders.invoice.show');
+        Route::get('/delivery-runs/{deliveryRun}/orders/{runOrder}/invoice/download', [DeliveryInvoiceController::class, 'download'])
+            ->name('delivery-runs.orders.invoice.download');
         Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/payments', [DeliveryPaymentController::class, 'store'])
             ->name('delivery-runs.orders.payments.store');
         Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/payments/{payment}/void', VoidDeliveryPaymentController::class)
@@ -209,6 +264,19 @@ Route::middleware(['auth', 'can:access-panel', 'can:view-deliveries'])->group(fu
             ->name('delivery-runs.orders.requeue');
     });
 });
+
+Route::middleware(['auth', 'can:access-panel', 'can:view-route-reports'])
+    ->prefix('route-reports')
+    ->name('route-reports.')
+    ->group(function (): void {
+        Route::get('/', [RouteReportController::class, 'index'])->name('index');
+        Route::get('/{deliveryRun}/{salesRoute}/print', [RouteReportController::class, 'print'])
+            ->withTrashed()
+            ->name('print');
+        Route::get('/{deliveryRun}/{salesRoute}/download', [RouteReportController::class, 'download'])
+            ->withTrashed()
+            ->name('download');
+    });
 
 Route::middleware(['auth', 'can:access-panel', 'can:manage-vehicles'])->group(function (): void {
     Route::resource('vehicles', VehicleController::class)->except(['show', 'destroy']);
@@ -219,6 +287,9 @@ Route::get('/inventory', InventoryController::class)
     ->name('inventory.index');
 
 Route::middleware(['auth', 'can:operate-inventory'])->group(function (): void {
+    Route::post('/inventory/stocks/{inventoryStock}/replenishments', ReplenishInventoryStockController::class)
+        ->name('inventory-stocks.replenishments.store');
+
     Route::get('/inventory/movements', [InventoryMovementController::class, 'index'])
         ->name('inventory-movements.index');
 
@@ -272,4 +343,9 @@ Route::middleware(['auth', 'can:configure-inventory'])->group(function (): void 
 
 Route::middleware(['auth', 'can:manage-users'])->group(function (): void {
     Route::resource('users', UserController::class)->except(['show', 'destroy']);
+});
+
+Route::middleware(['auth', 'can:manage-company-profile'])->prefix('company')->name('company.')->group(function (): void {
+    Route::get('/', [CompanyProfileController::class, 'edit'])->name('edit');
+    Route::put('/', [CompanyProfileController::class, 'update'])->name('update');
 });

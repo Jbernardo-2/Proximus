@@ -58,9 +58,9 @@ class ProductController extends Controller
 
     public function store(StoreProductRequest $request, CreateProductAction $createProduct): RedirectResponse
     {
-        $product = $createProduct->handle($request->validated(), $request->file('image'));
+        $createProduct->handle($request->validated(), $request->file('image'));
 
-        return redirect()->route('products.show', $product)->with('success', 'Producto creado con su presentación base.');
+        return redirect()->route('products.index')->with('success', 'Producto guardado correctamente.');
     }
 
     public function show(Product $product): View

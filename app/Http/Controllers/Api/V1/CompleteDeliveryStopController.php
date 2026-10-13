@@ -30,6 +30,7 @@ class CompleteDeliveryStopController extends Controller
 
         return new DeliveryRunOrderResource($completed->load([
             'order', 'items', 'payments.receivedBy', 'payments.voidedBy', 'completedBy',
+            'outcomeRecordedBy', 'settlement.lines.deliveryPayment', 'settlement.lines.receivable',
         ]));
     }
 }
