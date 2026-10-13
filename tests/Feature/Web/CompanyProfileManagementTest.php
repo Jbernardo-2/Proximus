@@ -126,12 +126,15 @@ class CompanyProfileManagementTest extends TestCase
             ->assertOk()
             ->assertSee('Proximus')
             ->assertSee('Distribución inteligente')
+            ->assertSee('images/proximus-logo-horizontal.svg')
+            ->assertSee('favicon.svg')
             ->assertDontSee($companyProfile->commercial_name)
             ->assertDontSee($companyProfile->slogan);
 
         $this->actingAs($administrator)
             ->get(route('dashboard'))
             ->assertOk()
+            ->assertSee('images/proximus-logo-horizontal.svg')
             ->assertSee('Empresa usuaria')
             ->assertSee($companyProfile->commercial_name)
             ->assertSee($companyProfile->slogan)

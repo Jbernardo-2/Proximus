@@ -16,7 +16,19 @@ class WebAuthenticationTest extends TestCase
         $this->get('/login')
             ->assertOk()
             ->assertSee('Bienvenido de nuevo')
+            ->assertSee('images/proximus-logo-horizontal.svg')
+            ->assertSee('favicon.svg')
             ->assertSee('images/proximus-login-hero.webp');
+    }
+
+    public function test_proximus_brand_assets_are_published(): void
+    {
+        $this->assertFileExists(public_path('images/proximus-logo-horizontal.svg'));
+        $this->assertFileExists(public_path('images/proximus-isotype.svg'));
+        $this->assertFileExists(public_path('favicon.svg'));
+        $this->assertFileExists(public_path('favicon.ico'));
+        $this->assertFileExists(public_path('apple-touch-icon.png'));
+        $this->assertGreaterThan(0, filesize(public_path('favicon.ico')));
     }
 
     public function test_unauthenticated_request_redirects_to_login(): void

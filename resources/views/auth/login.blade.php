@@ -7,15 +7,9 @@
             <div class="pointer-events-none absolute -bottom-32 right-0 size-72 rounded-full bg-sun-500/10 blur-3xl" aria-hidden="true"></div>
 
             <div class="relative w-full max-w-md">
-                <a href="{{ url('/') }}" class="group inline-flex items-center gap-3" aria-label="{{ config('app.name') }}">
-                    <span class="relative grid size-12 place-items-center overflow-hidden rounded-2xl bg-leaf-700 text-xl font-semibold text-white shadow-lg shadow-leaf-700/20 transition group-hover:-translate-y-0.5">
-                        P
-                        <span class="absolute bottom-0 right-0 size-3 rounded-tl-lg bg-sun-500" aria-hidden="true"></span>
-                    </span>
-                    <span>
-                        <span class="block text-xl font-semibold tracking-tight text-ink-950">{{ config('app.name') }}</span>
-                        <span class="block text-[0.68rem] font-semibold tracking-[0.18em] text-leaf-700 uppercase">Distribución inteligente</span>
-                    </span>
+                <a href="{{ url('/') }}" class="group inline-flex flex-col items-start gap-1.5" aria-label="{{ config('app.name') }}">
+                    <img src="{{ asset('images/proximus-logo-horizontal.svg') }}" alt="Proximus" class="h-auto w-52 transition group-hover:-translate-y-0.5 sm:w-56" width="752" height="180">
+                    <span class="pl-0.5 text-[0.68rem] font-semibold tracking-[0.18em] text-leaf-700 uppercase">Distribución inteligente</span>
                 </a>
 
                 <div class="mt-10 sm:mt-12">

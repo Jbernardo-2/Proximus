@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
+    <x-app-icons />
     <title>Ruta {{ $salesRoute->code }} · {{ $deliveryRun->scheduled_date->format('d/m/Y') }}</title>
     <style>
         @page { margin: 14mm 12mm 16mm; size: letter portrait; }

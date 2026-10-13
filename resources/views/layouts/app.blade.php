@@ -4,18 +4,15 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
+        <x-app-icons />
         <title>@yield('title', 'Catálogo') · {{ config('app.name') }}</title>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body>
         <div class="min-h-screen lg:grid lg:grid-cols-[17rem_1fr]">
             <aside class="hidden min-h-screen bg-ink-950 px-4 py-6 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-                <a href="{{ route('dashboard') }}" class="mb-4 flex items-center gap-3 px-2 text-white">
-                    <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-leaf-500 text-lg font-black">P</span>
-                    <span>
-                        <span class="block text-lg font-bold leading-5">{{ config('app.name') }}</span>
-                        <span class="text-xs text-stone-400">Distribución y rutas</span>
-                    </span>
+                <a href="{{ route('dashboard') }}" class="mb-4 block rounded-xl bg-white px-3 py-2 shadow-sm transition hover:-translate-y-0.5" aria-label="Ir al inicio de Proximus">
+                    <img src="{{ asset('images/proximus-logo-horizontal.svg') }}" alt="Proximus" class="h-auto w-full" width="752" height="180">
                 </a>
 
                 <div class="mb-5 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-white">
@@ -139,6 +136,9 @@
                         </div>
                     </div>
                     <nav data-mobile-menu class="mx-auto mt-3 hidden max-w-7xl grid-cols-2 gap-2 rounded-xl bg-ink-950 p-3 text-sm text-white lg:hidden">
+                        <a href="{{ route('dashboard') }}" class="col-span-2 flex items-center justify-center rounded-lg bg-white px-3 py-2" aria-label="Ir al inicio de Proximus">
+                            <img src="{{ asset('images/proximus-logo-horizontal.svg') }}" alt="Proximus" class="h-8 w-auto max-w-full" width="752" height="180">
+                        </a>
                         <div class="col-span-2 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
                             @if ($companyProfile->logo_path)
                                 <img src="{{ $companyProfile->logoUrl() }}" alt="" class="size-8 rounded-md bg-white object-contain p-0.5">

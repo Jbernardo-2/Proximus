@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <x-app-icons />
     <title>Comprobante {{ $receipt['payment']['receipt_number'] }} · Proximus</title>
     <style>
         @page { margin: 14mm 13mm 16mm; size: letter portrait; }
