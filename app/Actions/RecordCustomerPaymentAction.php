@@ -95,7 +95,7 @@ class RecordCustomerPaymentAction
             $entry = $lockedCustomer->accountEntries()->create([
                 'type' => CustomerAccountEntryType::CustomerPayment,
                 'status' => CustomerAccountEntryStatus::Active,
-                'receipt_number' => $this->generateNumber->handle('customer_payment', 'ABO', $receivedAt),
+                'receipt_number' => $this->generateNumber->handle('customer_payment', 'ABO', $receivedAt, $data['receipt_number'] ?? null),
                 'method' => $singlePaymentLine === null
                     ? null
                     : PaymentMethod::from($singlePaymentLine['method']),

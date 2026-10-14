@@ -6,6 +6,8 @@ use App\DeliveryRunStatus;
 use App\InventoryMovementType;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunItem;
+use App\Models\InventoryMovement;
+use App\Models\InventoryStock;
 use App\Models\User;
 use App\PaymentTerm;
 use Illuminate\Support\Facades\DB;
@@ -47,13 +49,7 @@ class SettleDeliveryRunAction
                     $creditReason = $runOrder->credit_reason
                         ?? ($data['credit_reasons'][$runOrder->id] ?? null);
 
-                    if (blank($creditReason)) {
-                        throw ValidationException::withMessages([
-                            "credit_reasons.{$runOrder->id}" => ["Indica por qué se autorizó el saldo pendiente del pedido {$runOrder->order->order_number}."],
-                        ]);
-                    }
-
-                    if (blank($runOrder->credit_reason)) {
+                    if (blank($runOrder->credit_reason) && filled($creditReason)) {
                         $creditReasonsToSave[$runOrder->id] = $creditReason;
                     }
                 }
@@ -106,6 +102,9 @@ class SettleDeliveryRunAction
                         ],
                     );
                 }
+
+                $this->recordLoss($run, $item, InventoryMovementType::DispatchDamage, (string) $item->damaged_quantity, $actor);
+                $this->recordLoss($run, $item, InventoryMovementType::DispatchMissing, (string) $item->missing_quantity, $actor);
             }
 
             $cashDeclared = (string) $data['cash_declared'];
@@ -142,5 +141,56 @@ class SettleDeliveryRunAction
 
             return $run;
         }, 3);
+    }
+
+    /**
+     * Leaves a trace of merchandise that left the warehouse on load and never came back.
+     * The stock was already discounted when the run was loaded, so the balances do not change.
+     */
+    private function recordLoss(
+        DeliveryRun $run,
+        DeliveryRunItem $item,
+        InventoryMovementType $type,
+        string $quantity,
+        User $actor,
+    ): void {
+        if (bccomp($quantity, '0', 6) <= 0) {
+            return;
+        }
+
+        $stock = InventoryStock::query()
+            ->where('warehouse_id', $run->warehouse_id)
+            ->where('product_id', $item->product_id)
+            ->lockForUpdate()
+            ->firstOrFail();
+        $formattedQuantity = rtrim(rtrim($quantity, '0'), '.');
+
+        InventoryMovement::query()->create([
+            'warehouse_id' => $run->warehouse_id,
+            'product_id' => $item->product_id,
+            'product_presentation_id' => $item->product_presentation_id,
+            'order_id' => $item->deliveryRunOrder->order_id,
+            'order_item_id' => $item->order_item_id,
+            'delivery_run_id' => $run->id,
+            'delivery_run_order_id' => $item->delivery_run_order_id,
+            'delivery_run_item_id' => $item->id,
+            'type' => $type,
+            'occurred_at' => now(),
+            'quantity_on_hand_delta' => '0.000000',
+            'quantity_reserved_delta' => '0.000000',
+            'quantity_on_hand_after' => $stock->quantity_on_hand,
+            'quantity_reserved_after' => $stock->quantity_reserved,
+            'presentation_quantity' => $quantity,
+            'conversion_factor' => $item->conversion_factor,
+            'product_sku' => $item->product_sku,
+            'product_name' => $item->product_name,
+            'presentation_name' => $item->presentation_name,
+            'base_unit_symbol' => $item->base_unit_symbol,
+            'reference_number' => $run->run_number,
+            'reason' => $type === InventoryMovementType::DispatchDamage
+                ? "{$formattedQuantity} {$item->presentation_name} dañado en ruta. Salió de bodega al cargar y no regresa a existencia."
+                : "{$formattedQuantity} {$item->presentation_name} faltante en ruta. Salió de bodega al cargar y no regresa a existencia.",
+            'created_by' => $actor->id,
+        ]);
     }
 }

@@ -6,6 +6,7 @@ use App\CustomerCreditAuthorizationType;
 use App\CustomerCreditStatus;
 use App\Models\Customer;
 use App\Models\CustomerCreditAuthorization;
+use App\Models\CustomerCreditProfile;
 use App\Models\CustomerReceivable;
 use App\Models\DeliveryRunOrder;
 use App\Models\Order;
@@ -78,6 +79,10 @@ class CustomerCreditService
     ): ?CustomerCreditAuthorization {
         $profile = $customer->creditProfile()->lockForUpdate()->first();
 
+        if (app(OfflineSync::class)->isActive()) {
+            return $this->recordOfflineException($customer, $profile, $amount, $actor, $type, $order, $runOrder);
+        }
+
         if ($profile === null || ! $profile->status->allowsNewCredit()) {
             throw ValidationException::withMessages([
                 'credit' => ['El cliente no tiene una línea de crédito activa.'],
@@ -112,6 +117,47 @@ class CustomerCreditService
             'credit_limit' => $profile->credit_limit,
             'exceeded_by' => $exceededBy,
             'reason' => $overrideReason,
+            'authorized_by' => $actor->id,
+            'authorized_at' => now(),
+        ]);
+    }
+
+    /**
+     * Credit granted on a device without connection is a fact already agreed with the customer:
+     * it is kept, and anything beyond what the customer had available is left for the supervisor.
+     */
+    private function recordOfflineException(
+        Customer $customer,
+        ?CustomerCreditProfile $profile,
+        string $amount,
+        User $actor,
+        CustomerCreditAuthorizationType $type,
+        ?Order $order,
+        ?DeliveryRunOrder $runOrder,
+    ): ?CustomerCreditAuthorization {
+        $summary = $this->summary($customer, $order);
+        $creditLimit = (string) ($profile?->credit_limit ?? '0');
+        $exposureAfter = bcadd($summary['exposure'], $amount, 4);
+        $allowsCredit = $profile?->status->allowsNewCredit() ?? false;
+
+        if ($allowsCredit && bccomp($exposureAfter, $creditLimit, 4) <= 0) {
+            return null;
+        }
+
+        $exceededBy = bcsub($exposureAfter, $creditLimit, 4);
+
+        return CustomerCreditAuthorization::query()->create([
+            'customer_id' => $customer->id,
+            'type' => $type,
+            'order_id' => $order?->id,
+            'delivery_run_order_id' => $runOrder?->id,
+            'requested_amount' => $amount,
+            'exposure_before' => $summary['exposure'],
+            'credit_limit' => $creditLimit,
+            'exceeded_by' => bccomp($exceededBy, '0', 4) > 0 ? $exceededBy : '0.0000',
+            'reason' => $allowsCredit
+                ? 'Crédito registrado sin conexión por encima del disponible.'
+                : 'Crédito registrado sin conexión a un cliente sin línea de crédito activa.',
             'authorized_by' => $actor->id,
             'authorized_at' => now(),
         ]);

@@ -19,6 +19,7 @@ use App\Http\Controllers\CustomerOpeningBalanceController;
 use App\Http\Controllers\CustomerPaymentController;
 use App\Http\Controllers\CustomerPaymentReceiptController;
 use App\Http\Controllers\CustomerPaymentReversalController;
+use App\Http\Controllers\CustomerVisitController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryInvoiceController;
 use App\Http\Controllers\DeliveryPaymentController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\DeliveryRunController;
 use App\Http\Controllers\DeliveryRunOrderController;
 use App\Http\Controllers\DeliveryRunOrderPreparationController;
 use App\Http\Controllers\DepartDeliveryRunController;
+use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\InventoryDocumentController;
@@ -46,8 +48,10 @@ use App\Http\Controllers\ProductConversionPreviewController;
 use App\Http\Controllers\ProductPresentationController;
 use App\Http\Controllers\ProductPresentationLookupController;
 use App\Http\Controllers\ProductSupplierController;
+use App\Http\Controllers\ReopenDeliveryStopController;
 use App\Http\Controllers\ReopenOrderController;
 use App\Http\Controllers\ReplenishInventoryStockController;
+use App\Http\Controllers\ReportCenterController;
 use App\Http\Controllers\RequeueDeliveryOrderController;
 use App\Http\Controllers\RouteReportController;
 use App\Http\Controllers\RouteStopController;
@@ -197,6 +201,7 @@ Route::middleware(['auth', 'can:view-orders'])->group(function (): void {
 });
 
 Route::middleware(['auth', 'can:manage-orders'])->group(function (): void {
+    Route::post('/customers/{customer}/visits', [CustomerVisitController::class, 'store'])->name('customers.visits.store');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
     Route::put('/orders/{order}', [OrderController::class, 'update'])->name('orders.update');
     Route::get('/orders/{order}/item-quote', OrderItemQuoteController::class)->name('orders.item-quote');
@@ -252,6 +257,8 @@ Route::middleware(['auth', 'can:access-panel', 'can:view-deliveries'])->group(fu
             ->name('delivery-runs.orders.preparation.update');
         Route::put('/delivery-runs/{deliveryRun}/orders/{runOrder}/outcome', CompleteDeliveryStopController::class)
             ->name('delivery-runs.orders.outcome');
+        Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/outcome/reopen', ReopenDeliveryStopController::class)
+            ->name('delivery-runs.orders.outcome.reopen');
         Route::get('/delivery-runs/{deliveryRun}/orders/{runOrder}/invoice', [DeliveryInvoiceController::class, 'show'])
             ->name('delivery-runs.orders.invoice.show');
         Route::get('/delivery-runs/{deliveryRun}/orders/{runOrder}/invoice/download', [DeliveryInvoiceController::class, 'download'])
@@ -276,6 +283,17 @@ Route::middleware(['auth', 'can:access-panel', 'can:view-route-reports'])
         Route::get('/{deliveryRun}/{salesRoute}/download', [RouteReportController::class, 'download'])
             ->withTrashed()
             ->name('download');
+    });
+
+Route::middleware(['auth', 'can:access-panel', 'can:view-reports'])
+    ->prefix('reports')
+    ->name('reports.')
+    ->group(function (): void {
+        Route::get('/', [ReportCenterController::class, 'index'])->name('index');
+        Route::get('/{report}', [ReportCenterController::class, 'show'])->name('show');
+        Route::get('/{report}/print', [ReportCenterController::class, 'print'])->name('print');
+        Route::get('/{report}/download', [ReportCenterController::class, 'download'])->name('download');
+        Route::get('/{report}/export', [ReportCenterController::class, 'export'])->name('export');
     });
 
 Route::middleware(['auth', 'can:access-panel', 'can:manage-vehicles'])->group(function (): void {
@@ -343,6 +361,9 @@ Route::middleware(['auth', 'can:configure-inventory'])->group(function (): void 
 
 Route::middleware(['auth', 'can:manage-users'])->group(function (): void {
     Route::resource('users', UserController::class)->except(['show', 'destroy']);
+    Route::get('/devices', [DeviceController::class, 'index'])->name('devices.index');
+    Route::post('/devices/{device}/revoke', [DeviceController::class, 'revoke'])->name('devices.revoke');
+    Route::post('/devices/{device}/restore', [DeviceController::class, 'restore'])->name('devices.restore');
 });
 
 Route::middleware(['auth', 'can:manage-company-profile'])->prefix('company')->name('company.')->group(function (): void {

@@ -48,7 +48,7 @@ enum UserRole: string
 
     public function canRecordCustomerPayments(): bool
     {
-        return in_array($this, [self::Admin, self::Supervisor], true);
+        return in_array($this, [self::Admin, self::Supervisor, self::Preventista], true);
     }
 
     public function canReverseCustomerPayments(): bool
@@ -114,6 +114,11 @@ enum UserRole: string
     public function canViewDeliveries(): bool
     {
         return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero, self::Repartidor], true);
+    }
+
+    public function canViewReports(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
     }
 
     public function canViewRouteReports(): bool
@@ -253,6 +258,18 @@ enum UserRole: string
 
         if ($this->canManageUsers()) {
             $abilities[] = 'users:manage';
+        }
+
+        if ($this->canViewReports()) {
+            $abilities[] = 'reports:view';
+        }
+
+        if ($this->canViewRouteReports()) {
+            $abilities[] = 'route-reports:view';
+        }
+
+        if ($this->canManageCompanyProfile()) {
+            $abilities[] = 'company:manage';
         }
 
         return $abilities;

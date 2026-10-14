@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\RecordCustomerVisitAction;
 use App\Actions\RecordDeliverySettlementAction;
+use App\CustomerVisitType;
 use App\DeliveryOrderStatus;
 use App\Http\Requests\StoreDeliverySettlementRequest;
 use App\Models\DeliveryRun;
@@ -17,10 +19,12 @@ class DeliveryPaymentController extends Controller
         DeliveryRun $deliveryRun,
         DeliveryRunOrder $runOrder,
         RecordDeliverySettlementAction $recordSettlement,
+        RecordCustomerVisitAction $recordVisit,
     ): RedirectResponse {
         /** @var User $user */
         $user = $request->user();
-        $recordSettlement->handle($deliveryRun, $runOrder, $request->validated(), $user);
+        $settlement = $recordSettlement->handle($deliveryRun, $runOrder, $request->validated(), $user);
+        $recordVisit->forRequest($request, CustomerVisitType::DeliveryPayment, $runOrder->order()->value('customer_id'), $settlement);
         $completedStatuses = collect(DeliveryOrderStatus::cases())
             ->filter(fn (DeliveryOrderStatus $status): bool => $status->isCompleted())
             ->map->value;

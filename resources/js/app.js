@@ -1,5 +1,6 @@
 import './customer-location.js';
 import './dashboard.js';
+import './location-capture.js';
 import './notifications.js';
 import './remote-picker.js';
 
@@ -680,6 +681,39 @@ document.querySelectorAll('[data-preparation-form]').forEach((form) => {
 document.querySelectorAll('[data-delivery-quantity]').forEach((input) => {
     input.addEventListener('focus', () => input.select());
     input.addEventListener('mouseup', (event) => event.preventDefault());
+
+    if (input.name.endsWith('[delivered_quantity]')) {
+        return;
+    }
+
+    input.addEventListener('input', () => {
+        const rowInputs = [...input.closest('tr').querySelectorAll('[data-delivery-quantity]')];
+        const delivered = rowInputs.find((candidate) => candidate.name.endsWith('[delivered_quantity]'));
+        const notDelivered = rowInputs
+            .filter((candidate) => candidate !== delivered)
+            .reduce((total, candidate) => total + Number(candidate.value || 0), 0);
+
+        delivered.value = String(Math.max(Number((Number(delivered.max) - notDelivered).toFixed(6)), 0));
+    });
+});
+
+document.querySelectorAll('[data-delivery-outcome-form]').forEach((form) => {
+    const reasonWrap = form.querySelector('[data-return-reason-wrap]');
+    const reason = form.querySelector('[data-return-reason]');
+    const returnedInputs = [...form.querySelectorAll('[data-delivery-returned]')];
+    const syncReturnReason = () => {
+        const hasReturn = returnedInputs.some((input) => Number(input.value || 0) > 0);
+
+        reasonWrap.classList.toggle('hidden', ! hasReturn);
+        reason.required = hasReturn;
+
+        if (! hasReturn) {
+            reason.value = '';
+        }
+    };
+
+    returnedInputs.forEach((input) => input.addEventListener('input', syncReturnReason));
+    syncReturnReason();
 });
 
 document.querySelectorAll('[data-combined-payment-form]').forEach((form) => {
@@ -690,7 +724,6 @@ document.querySelectorAll('[data-combined-payment-form]').forEach((form) => {
     const paymentTotal = form.querySelector('[data-payment-total]');
     const creditTotal = form.querySelector('[data-credit-total]');
     const error = form.querySelector('[data-payment-error]');
-    const creditReason = form.querySelector('[data-credit-reason]');
     const creditReasonWrap = form.querySelector('[data-credit-reason-wrap]');
     const balance = Number(form.dataset.balance ?? 0);
     const currency = form.dataset.currency ?? 'HNL';
@@ -731,7 +764,6 @@ document.querySelectorAll('[data-combined-payment-form]').forEach((form) => {
             : 'La distribución debe completar exactamente el total entregado.';
         error.classList.toggle('hidden', isExact);
         submitButton.disabled = total <= 0 || ! isExact;
-        creditReason.required = hasCredit;
         creditReasonWrap.classList.toggle('hidden', ! hasCredit);
     };
 

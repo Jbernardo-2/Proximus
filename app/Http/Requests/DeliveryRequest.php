@@ -23,7 +23,7 @@ abstract class DeliveryRequest extends FormRequest
             'items.*.returned_quantity' => 'cantidad devuelta',
             'items.*.damaged_quantity' => 'cantidad dañada',
             'items.*.missing_quantity' => 'cantidad faltante',
-            'outcome_reason' => 'motivo de entrega incompleta',
+            'outcome_reason' => 'motivo de la devolución',
             'outcome_notes' => 'observaciones de entrega',
             'credit_reason' => 'justificación del saldo',
             'receiver_name' => 'persona que recibió',

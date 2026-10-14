@@ -18,6 +18,9 @@ class ProductPresentation extends Model
     /** @use HasFactory<ProductPresentationFactory> */
     use HasFactory, HasUlids, SoftDeletes;
 
+    /** @var list<string> Keeps the product's sync version current when a presentation changes. */
+    protected $touches = ['product'];
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);

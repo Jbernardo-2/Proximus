@@ -16,6 +16,8 @@ enum InventoryMovementType: string
     case OrderReservationRelease = 'order_reservation_release';
     case DispatchLoad = 'dispatch_load';
     case DispatchReturn = 'dispatch_return';
+    case DispatchDamage = 'dispatch_damage';
+    case DispatchMissing = 'dispatch_missing';
 
     public function label(): string
     {
@@ -32,6 +34,8 @@ enum InventoryMovementType: string
             self::OrderReservationRelease => 'Liberación de pedido',
             self::DispatchLoad => 'Carga para reparto',
             self::DispatchReturn => 'Retorno de reparto',
+            self::DispatchDamage => 'Merma por daño en reparto',
+            self::DispatchMissing => 'Faltante en reparto',
         };
     }
 

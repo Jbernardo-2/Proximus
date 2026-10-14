@@ -21,6 +21,12 @@ class LoginRequest extends FormRequest
             $normalized['device_name'] = trim($this->string('device_name')->toString());
         }
 
+        foreach (['installation_id', 'platform', 'app_version'] as $key) {
+            if ($this->has($key)) {
+                $normalized[$key] = trim($this->string($key)->toString());
+            }
+        }
+
         $this->merge($normalized);
     }
 
@@ -31,6 +37,9 @@ class LoginRequest extends FormRequest
             'password' => ['required', 'string', 'max:128'],
             'remember' => ['sometimes', 'boolean'],
             'device_name' => ['sometimes', 'string', 'max:100'],
+            'installation_id' => ['sometimes', 'string', 'min:8', 'max:64', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'platform' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'app_version' => ['sometimes', 'nullable', 'string', 'max:40'],
         ];
     }
 
@@ -40,6 +49,7 @@ class LoginRequest extends FormRequest
             'email' => 'correo electrónico',
             'password' => 'contraseña',
             'device_name' => 'nombre del dispositivo',
+            'installation_id' => 'identificador de instalación',
         ];
     }
 }

@@ -184,7 +184,7 @@ class DeliveryApiTest extends TestCase
         $baseUrl = "/api/v1/delivery-runs/{$run->id}/orders/{$runOrder->id}/payments";
         $this->postJson($baseUrl, [
             'allocations' => [
-                ['method' => SettlementMethod::BankTransfer->value, 'amount' => '10', 'reference' => null],
+                ['method' => SettlementMethod::Check->value, 'amount' => '10', 'reference' => null],
                 ['method' => SettlementMethod::Credit->value, 'amount' => '10', 'reference' => null],
             ],
             'credit_reason' => 'Saldo acordado.',

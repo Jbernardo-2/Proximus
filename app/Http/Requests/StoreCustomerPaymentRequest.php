@@ -53,6 +53,7 @@ class StoreCustomerPaymentRequest extends OperationsRequest
         $this->merge([
             'amount' => trim((string) $this->input('amount', '')),
             'notes' => $this->nullableString('notes'),
+            'receipt_number' => $this->nullableString('receipt_number'),
             'payment_lines' => $paymentLines,
             'allocations' => $allocations,
         ]);
@@ -63,6 +64,7 @@ class StoreCustomerPaymentRequest extends OperationsRequest
         return [
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,4'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'receipt_number' => ['nullable', 'string', 'max:40'],
             'payment_lines' => ['required', 'array', 'min:1', 'max:10'],
             'payment_lines.*.method' => ['required', Rule::enum(PaymentMethod::class)],
             'payment_lines.*.amount' => ['required', 'numeric', 'gt:0', 'decimal:0,4'],

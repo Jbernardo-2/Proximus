@@ -58,6 +58,7 @@ class DeliveryRunController extends Controller
             ->orderByRaw('requested_delivery_date is null')
             ->orderBy('requested_delivery_date')
             ->orderBy('route_visit_order')
+            
             ->orderBy('order_number')
             ->paginate(10, ['*'], 'orders_page')
             ->withQueryString();

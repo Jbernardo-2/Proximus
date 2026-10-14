@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\CreateOrderAction;
+use App\Actions\CreateCompleteOrderAction;
+use App\Actions\RecordCustomerVisitAction;
 use App\Actions\UpdateOrderAction;
+use App\CustomerVisitType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\UpdateOrderRequest;
@@ -55,11 +57,15 @@ class OrderController extends Controller
         return OrderResource::collection($orders);
     }
 
-    public function store(StoreOrderRequest $request, CreateOrderAction $createOrder): JsonResponse
-    {
+    public function store(
+        StoreOrderRequest $request,
+        CreateCompleteOrderAction $createOrder,
+        RecordCustomerVisitAction $recordVisit,
+    ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
         $order = $createOrder->handle($request->validated(), $user);
+        $recordVisit->forRequest($request, CustomerVisitType::OrderTaken, $order->customer_id, $order);
 
         return (new OrderResource($this->loadOrder($order)))
             ->response()

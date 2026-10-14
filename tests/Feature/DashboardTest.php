@@ -66,6 +66,7 @@ class DashboardTest extends TestCase
         $run = DeliveryRun::factory()->create(['status' => DeliveryRunStatus::InTransit, 'driver_name' => 'Carlos Repartidor']);
         $deliveredToday = DeliveryRunOrder::factory()->create([
             'delivery_run_id' => $run->id,
+            'visit_order' => 1,
             'status' => DeliveryOrderStatus::Delivered,
             'delivered_total' => '100.0000',
             'balance_due' => '40.0000',

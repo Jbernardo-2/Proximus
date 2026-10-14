@@ -35,6 +35,9 @@ class StoreDeliverySettlementRequest extends DeliveryRequest
                     'reference' => filled($allocation['reference'] ?? null)
                         ? trim((string) $allocation['reference'])
                         : null,
+                    'receipt_number' => filled($allocation['receipt_number'] ?? null)
+                        ? trim((string) $allocation['receipt_number'])
+                        : null,
                 ];
             })
             ->all();
@@ -43,6 +46,7 @@ class StoreDeliverySettlementRequest extends DeliveryRequest
             'allocations' => $allocations,
             'credit_reason' => $this->nullableString('credit_reason'),
             'credit_override_reason' => $this->nullableString('credit_override_reason'),
+            'invoice_number' => $this->nullableString('invoice_number'),
         ]);
     }
 
@@ -53,6 +57,8 @@ class StoreDeliverySettlementRequest extends DeliveryRequest
             'allocations.*.method' => ['required', Rule::enum(SettlementMethod::class)],
             'allocations.*.amount' => ['required', 'numeric', 'gt:0', 'decimal:0,4'],
             'allocations.*.reference' => ['nullable', 'string', 'max:120'],
+            'allocations.*.receipt_number' => ['nullable', 'string', 'max:40'],
+            'invoice_number' => ['nullable', 'string', 'max:30'],
             'credit_reason' => ['nullable', 'string', 'max:2000'],
             'credit_override_reason' => ['nullable', 'string', 'max:2000'],
         ];
@@ -87,10 +93,6 @@ class StoreDeliverySettlementRequest extends DeliveryRequest
 
                 if ($creditLines > 1) {
                     $validator->errors()->add('allocations', 'Agrega el crédito en una sola línea.');
-                }
-
-                if ($creditLines > 0 && blank($this->input('credit_reason'))) {
-                    $validator->errors()->add('credit_reason', 'Describe el acuerdo o motivo del crédito.');
                 }
 
                 $runOrder = $this->route('runOrder');

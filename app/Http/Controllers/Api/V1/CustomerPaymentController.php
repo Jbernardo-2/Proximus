@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\RecordCustomerPaymentAction;
+use App\Actions\RecordCustomerVisitAction;
+use App\CustomerVisitType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCustomerPaymentRequest;
 use App\Models\Customer;
@@ -15,10 +17,12 @@ class CustomerPaymentController extends Controller
         StoreCustomerPaymentRequest $request,
         Customer $customer,
         RecordCustomerPaymentAction $recordPayment,
+        RecordCustomerVisitAction $recordVisit,
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
         $payment = $recordPayment->handle($customer, $request->validated(), $user);
+        $recordVisit->forRequest($request, CustomerVisitType::AccountPayment, $customer, $payment);
 
         return response()->json([
             'data' => [

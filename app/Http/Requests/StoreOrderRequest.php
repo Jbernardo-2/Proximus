@@ -76,6 +76,14 @@ class StoreOrderRequest extends OrderRequest
             'requested_delivery_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:order_date'],
             'payment_term' => ['required', Rule::enum(PaymentTerm::class)],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'items' => ['sometimes', 'array', 'min:1', 'max:200'],
+            'items.*.product_presentation_id' => ['required', 'ulid', 'distinct'],
+            'items.*.quantity' => ['required', 'numeric', 'min:0.000001', 'decimal:0,6'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0', 'decimal:0,4'],
+            'items.*.override_reason' => ['nullable', 'string', 'max:1000'],
+            'items.*.notes' => ['nullable', 'string', 'max:1000'],
+            'confirm' => ['sometimes', 'boolean'],
+            'credit_override_reason' => ['nullable', 'string', 'max:2000'],
         ];
     }
 

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\RecordCustomerVisitAction;
 use App\Actions\RecordDeliverySettlementAction;
+use App\CustomerVisitType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDeliverySettlementRequest;
 use App\Http\Resources\Api\V1\DeliveryRunOrderResource;
@@ -18,10 +20,12 @@ class DeliveryPaymentController extends Controller
         DeliveryRun $deliveryRun,
         DeliveryRunOrder $runOrder,
         RecordDeliverySettlementAction $recordSettlement,
+        RecordCustomerVisitAction $recordVisit,
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
-        $recordSettlement->handle($deliveryRun, $runOrder, $request->validated(), $user);
+        $settlement = $recordSettlement->handle($deliveryRun, $runOrder, $request->validated(), $user);
+        $recordVisit->forRequest($request, CustomerVisitType::DeliveryPayment, $runOrder->order()->value('customer_id'), $settlement);
         $runOrder->refresh()->load([
             'order',
             'items',
