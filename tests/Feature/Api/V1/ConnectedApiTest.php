@@ -12,6 +12,8 @@ use App\Models\DeliveryRunOrder;
 use App\Models\Device;
 use App\Models\InventoryStock;
 use App\Models\ProductPresentation;
+use App\Models\RouteStop;
+use App\Models\SalesRoute;
 use App\Models\User;
 use App\Notifications\OperationalNotification;
 use App\PaymentMethod;
@@ -115,8 +117,24 @@ class ConnectedApiTest extends TestCase
         $this->assertSame('800.0000', CustomerReceivable::query()->findOrFail($receivableId)->outstanding_amount);
 
         $preventista = User::factory()->preventista()->create();
+        $route = SalesRoute::factory()->create(['salesperson_id' => $preventista->id]);
+        RouteStop::factory()->create(['sales_route_id' => $route->id, 'customer_id' => $customer->id, 'is_active' => true]);
+        $otherDebt = CustomerReceivable::factory()->create();
         Sanctum::actingAs($preventista, $preventista->apiAbilities());
-        $this->getJson('/api/v1/sync/pull/receivables')->assertForbidden();
+
+        $this->getJson('/api/v1/sync/pull/receivables')
+            ->assertOk()
+            ->assertJsonCount(1, 'records')
+            ->assertJsonPath('records.0.id', $receivableId);
+        $this->assertNotSame($otherDebt->id, $receivableId);
+        $collected = $this->postJson("/api/v1/customers/{$customer->id}/payments", [
+            'amount' => '200',
+            'payment_lines' => [['method' => PaymentMethod::Cash->value, 'amount' => '200']],
+            'allocations' => [['receivable_id' => $receivableId, 'amount' => '200']],
+        ])->assertCreated()->json('data.id');
+        $this->getJson("/api/v1/customers/{$customer->id}/payments/{$collected}/receipt")->assertOk();
+        $this->postJson("/api/v1/customers/{$customer->id}/payments/{$collected}/reversal", ['reason' => 'Prueba.'])->assertForbidden();
+        $this->assertSame('600.0000', CustomerReceivable::query()->findOrFail($receivableId)->outstanding_amount);
     }
 
     public function test_settled_delivery_invoice_details_and_pdf(): void

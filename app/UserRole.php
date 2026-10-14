@@ -48,7 +48,7 @@ enum UserRole: string
 
     public function canRecordCustomerPayments(): bool
     {
-        return in_array($this, [self::Admin, self::Supervisor], true);
+        return in_array($this, [self::Admin, self::Supervisor, self::Preventista], true);
     }
 
     public function canReverseCustomerPayments(): bool
