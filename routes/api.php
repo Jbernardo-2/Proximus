@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\ConfirmOrderController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerCreditController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
+use App\Http\Controllers\Api\V1\CustomerVisitController;
 use App\Http\Controllers\Api\V1\DeliveryPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryRunController;
 use App\Http\Controllers\Api\V1\DeliveryRunOrderController;
@@ -34,6 +35,7 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductConversionPreviewController;
 use App\Http\Controllers\Api\V1\ProductPresentationController;
 use App\Http\Controllers\Api\V1\ProductSupplierController;
+use App\Http\Controllers\Api\V1\ReopenDeliveryStopController;
 use App\Http\Controllers\Api\V1\ReopenOrderController;
 use App\Http\Controllers\Api\V1\RequeueDeliveryOrderController;
 use App\Http\Controllers\Api\V1\RouteStopController;
@@ -41,6 +43,7 @@ use App\Http\Controllers\Api\V1\SalesRouteController;
 use App\Http\Controllers\Api\V1\SettleDeliveryRunController;
 use App\Http\Controllers\Api\V1\StartDeliveryPreparationController;
 use App\Http\Controllers\Api\V1\SupplierController;
+use App\Http\Controllers\Api\V1\SyncController;
 use App\Http\Controllers\Api\V1\UpdateDeliveryOrderPreparationController;
 use App\Http\Controllers\Api\V1\UpdateDeliveryPreparationController;
 use App\Http\Controllers\Api\V1\UserController;
@@ -56,6 +59,12 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::delete('/tokens/current', [AuthTokenController::class, 'destroy'])->name('tokens.destroy');
+
+        Route::prefix('sync')->name('sync.')->group(function (): void {
+            Route::get('/', [SyncController::class, 'manifest'])->name('manifest');
+            Route::get('/pull/{resource}', [SyncController::class, 'pull'])->name('pull');
+            Route::post('/push', [SyncController::class, 'push'])->name('push');
+        });
 
         Route::middleware(['abilities:users:manage', 'can:manage-users'])->group(function (): void {
             Route::apiResource('users', UserController::class)->except('destroy');
@@ -107,6 +116,7 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
 
         Route::middleware(['abilities:orders:manage', 'can:manage-orders'])->group(function (): void {
             Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+            Route::post('/customers/{customer}/visits', [CustomerVisitController::class, 'store'])->name('customers.visits.store');
             Route::put('/orders/{order}', [OrderController::class, 'update'])->name('orders.update');
             Route::get('/orders/{order}/item-quote', OrderItemQuoteController::class)
                 ->name('orders.item-quote');
@@ -170,6 +180,8 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
             Route::scopeBindings()->group(function (): void {
                 Route::put('/delivery-runs/{deliveryRun}/orders/{runOrder}/outcome', CompleteDeliveryStopController::class)
                     ->name('delivery-runs.orders.outcome');
+                Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/outcome/reopen', ReopenDeliveryStopController::class)
+                    ->name('delivery-runs.orders.outcome.reopen');
                 Route::post('/delivery-runs/{deliveryRun}/orders/{runOrder}/payments', [DeliveryPaymentController::class, 'store'])
                     ->name('delivery-runs.orders.payments.store');
             });

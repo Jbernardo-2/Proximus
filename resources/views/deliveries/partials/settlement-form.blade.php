@@ -6,7 +6,10 @@
                 <h4 class="mt-1 text-lg font-black text-amber-950">Falta registrar el pago</h4>
                 <p class="text-sm text-amber-900">La parada seguirá activa hasta distribuir todo el total entre pagos y/o crédito.</p>
             </div>
-            <p class="text-2xl font-black text-amber-950">{{ $currency }} {{ number_format((float) $runOrder->delivered_total, 2) }}</p>
+            <div class="flex items-center gap-4">
+                <form method="POST" action="{{ route('delivery-runs.orders.outcome.reopen', [$deliveryRun, $runOrder]) }}">@csrf<button class="btn-secondary" type="submit">Corregir cantidades</button></form>
+                <p class="text-2xl font-black text-amber-950">{{ $currency }} {{ number_format((float) $runOrder->delivered_total, 2) }}</p>
+            </div>
         </div>
     </div>
 
@@ -23,6 +26,7 @@
 
     <form method="POST" action="{{ route('delivery-runs.orders.payments.store', [$deliveryRun, $runOrder]) }}" class="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4" data-combined-payment-form data-balance="{{ $runOrder->delivered_total }}" data-currency="{{ $currency }}">
         @csrf
+        <x-location-fields />
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div><h4 class="font-black text-emerald-950">Distribución del pago</h4><p class="text-sm text-emerald-800">El crédito se agrega como un método explícito y crea una deuda en la cuenta del cliente.</p></div>
             <button class="btn-secondary" type="button" data-add-payment>＋ Agregar método</button>
@@ -48,7 +52,7 @@
             <div class="rounded-xl bg-white p-3"><p class="text-xs font-bold text-ink-600 uppercase">Distribuido</p><p class="mt-1 text-lg font-black text-emerald-700" data-payment-total>{{ $currency }} {{ number_format((float) $runOrder->delivered_total, 2) }}</p></div>
             <div class="rounded-xl bg-amber-50 p-3"><p class="text-xs font-bold text-amber-800 uppercase">Falta distribuir</p><p class="mt-1 text-lg font-black text-amber-900" data-credit-total>{{ $currency }} 0.00</p></div>
         </div>
-        <div class="hidden" data-credit-reason-wrap><label class="form-label" for="settlement-credit-{{ $runOrder->id }}">Acuerdo o motivo del crédito *</label><input class="form-input" id="settlement-credit-{{ $runOrder->id }}" name="credit_reason" maxlength="2000" value="{{ old('credit_reason') }}" placeholder="Ejemplo: cliente pagará el saldo el viernes" data-credit-reason></div>
+        <div class="hidden" data-credit-reason-wrap><label class="form-label" for="settlement-credit-{{ $runOrder->id }}">Acuerdo o motivo del crédito <span class="font-normal">(opcional)</span></label><input class="form-input" id="settlement-credit-{{ $runOrder->id }}" name="credit_reason" maxlength="2000" value="{{ old('credit_reason') }}" placeholder="Ejemplo: cliente pagará el saldo el viernes" data-credit-reason></div>
         @if(auth()->user()->canOverrideCustomerCredit())
             <div><label class="form-label" for="settlement-credit-override-{{ $runOrder->id }}">Autorización excepcional <span class="font-normal">(solo si supera el disponible)</span></label><textarea class="form-input min-h-20" id="settlement-credit-override-{{ $runOrder->id }}" name="credit_override_reason" maxlength="2000" placeholder="Motivo obligatorio para autorizar un exceso de límite">{{ old('credit_override_reason') }}</textarea></div>
         @endif

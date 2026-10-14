@@ -65,6 +65,8 @@ class CompleteDeliveryStopAction
 
             $deliveredTotal = '0.0000';
             $anyDelivered = false;
+            $anyReturned = false;
+            $anyDamaged = false;
             $allRequestedDelivered = true;
 
             foreach ($runItems as $item) {
@@ -112,6 +114,8 @@ class CompleteDeliveryStopAction
                 ])->save();
                 $deliveredTotal = bcadd($deliveredTotal, $lineTotal, 4);
                 $anyDelivered = $anyDelivered || bccomp($delivered, '0', 6) > 0;
+                $anyReturned = $anyReturned || bccomp($returned, '0', 6) > 0;
+                $anyDamaged = $anyDamaged || bccomp($damaged, '0', 6) > 0;
                 $allRequestedDelivered = $allRequestedDelivered
                     && bccomp($delivered, (string) $item->requested_quantity, 6) === 0;
             }
@@ -123,10 +127,12 @@ class CompleteDeliveryStopAction
 
             if ($outcomeStatus === DeliveryOrderStatus::Delivered) {
                 $reason = null;
-            } elseif ($reason === null) {
+            } elseif ($reason === null && $anyReturned) {
                 throw ValidationException::withMessages([
-                    'outcome_reason' => ['Selecciona el motivo de la entrega incompleta.'],
+                    'outcome_reason' => ['Selecciona el motivo de la devolución.'],
                 ]);
+            } elseif ($reason === null) {
+                $reason = $anyDamaged ? DeliveryOutcomeReason::DamagedGoods : DeliveryOutcomeReason::StockShortage;
             }
 
             if ($anyDelivered && empty($data['receiver_name'])) {

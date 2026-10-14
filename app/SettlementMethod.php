@@ -30,7 +30,7 @@ enum SettlementMethod: string
 
     public function requiresReference(): bool
     {
-        return in_array($this, [self::BankTransfer, self::Card, self::Check], true);
+        return in_array($this, [self::Card, self::Check], true);
     }
 
     public function paymentMethod(): ?PaymentMethod

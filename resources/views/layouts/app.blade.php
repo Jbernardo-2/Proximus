@@ -36,7 +36,7 @@
                     <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard') ? 'nav-link-active' : '' }}">
                         <span class="text-base">⌂</span> Resumen
                     </a>
-                    @if (auth()->user()->can('manage-customers') || auth()->user()->can('view-customer-credit') || auth()->user()->can('view-routes') || auth()->user()->can('view-orders') || auth()->user()->can('view-deliveries') || auth()->user()->can('view-route-reports') || auth()->user()->can('view-inventory'))
+                    @if (auth()->user()->can('manage-customers') || auth()->user()->can('view-customer-credit') || auth()->user()->can('view-routes') || auth()->user()->can('view-orders') || auth()->user()->can('view-deliveries') || auth()->user()->can('view-route-reports') || auth()->user()->can('view-reports') || auth()->user()->can('view-inventory'))
                         <p class="px-3 pb-1 pt-6 text-[11px] font-semibold tracking-[0.16em] text-stone-500 uppercase">Operación</p>
                         @can('manage-customers')
                             <a href="{{ route('customers.index') }}" class="nav-link {{ request()->routeIs('customers.*') ? 'nav-link-active' : '' }}">
@@ -66,6 +66,11 @@
                         @can('view-inventory')
                             <a href="{{ route('inventory.index') }}" class="nav-link {{ request()->routeIs('inventory.*', 'inventory-*', 'warehouses.*') ? 'nav-link-active' : '' }}">
                                 <span class="text-base">▥</span> Inventario
+                            </a>
+                        @endcan
+                        @can('view-reports')
+                            <a href="{{ route('reports.index') }}" class="nav-link {{ request()->routeIs('reports.*') ? 'nav-link-active' : '' }}">
+                                <span class="text-base">▥</span> Reportes
                             </a>
                         @endcan
                         @can('view-route-reports')
@@ -166,6 +171,9 @@
                         @endcan
                         @can('view-inventory')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('inventory.index') }}">Inventario</a>
+                        @endcan
+                        @can('view-reports')
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('reports.index') }}">Reportes</a>
                         @endcan
                         @can('view-route-reports')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('route-reports.index') }}">Reportes de ruta</a>

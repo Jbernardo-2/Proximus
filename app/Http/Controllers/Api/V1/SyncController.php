@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\CustomerVisitReason;
+use App\DeliveryOutcomeReason;
+use App\Http\Controllers\Controller;
+use App\Models\CompanyProfile;
+use App\Models\User;
+use App\PaymentMethod;
+use App\PaymentTerm;
+use App\Services\SyncPullService;
+use App\Services\SyncPushService;
+use App\SettlementMethod;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+
+class SyncController extends Controller
+{
+    public function manifest(Request $request, SyncPullService $pull): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $company = CompanyProfile::query()->find(CompanyProfile::SINGLETON_ID);
+
+        return response()->json([
+            'server_time' => now()->toIso8601String(),
+            'timezone' => config('app.timezone'),
+            'currency' => mb_strtoupper((string) config('proximus.currency', 'HNL')),
+            'user' => ['id' => $user->id, 'name' => $user->name, 'role' => $user->role->value],
+            'company' => $company?->only(['commercial_name', 'legal_name', 'rtn', 'phone', 'whatsapp', 'email', 'address', 'slogan']),
+            'resources' => $pull->manifest($user),
+            'operations' => array_keys(SyncPushService::OPERATIONS),
+            'catalogs' => [
+                'payment_terms' => $this->labels(PaymentTerm::cases()),
+                'payment_methods' => collect(PaymentMethod::cases())->map(fn (PaymentMethod $method): array => [
+                    'value' => $method->value,
+                    'label' => $method->label(),
+                    'requires_reference' => $method->requiresReference(),
+                ])->all(),
+                'settlement_methods' => collect(SettlementMethod::cases())->map(fn (SettlementMethod $method): array => [
+                    'value' => $method->value,
+                    'label' => $method->label(),
+                    'requires_reference' => $method->requiresReference(),
+                    'is_credit' => $method->isCredit(),
+                ])->all(),
+                'delivery_outcome_reasons' => $this->labels(DeliveryOutcomeReason::cases()),
+                'visit_reasons' => $this->labels(CustomerVisitReason::cases()),
+            ],
+        ]);
+    }
+
+    public function pull(Request $request, string $resource, SyncPullService $pull): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($pull->exists($resource), 404);
+        abort_unless($pull->allows($user, $resource), 403);
+        $validated = $request->validate([
+            'cursor' => ['nullable', 'string', 'max:200'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:'.SyncPullService::MAXIMUM_LIMIT],
+        ]);
+
+        return response()->json($pull->pull(
+            $user,
+            $resource,
+            $validated['cursor'] ?? null,
+            (int) ($validated['limit'] ?? SyncPullService::DEFAULT_LIMIT),
+        ));
+    }
+
+    public function push(Request $request, SyncPushService $push): JsonResponse
+    {
+        $validated = $request->validate([
+            'operations' => ['required', 'array', 'min:1', 'max:100'],
+            'operations.*.client_reference' => ['required', 'string', 'max:100', 'distinct'],
+            'operations.*.type' => ['required', 'string', Rule::in(array_keys(SyncPushService::OPERATIONS))],
+            'operations.*.payload' => ['required', 'array'],
+        ]);
+
+        return response()->json([
+            'server_time' => now()->toIso8601String(),
+            'results' => $push->push($request, $validated['operations']),
+        ]);
+    }
+
+    /**
+     * @param  list<\UnitEnum>  $cases
+     * @return list<array{value: string, label: string}>
+     */
+    private function labels(array $cases): array
+    {
+        return array_map(fn ($case): array => ['value' => $case->value, 'label' => $case->label()], $cases);
+    }
+}

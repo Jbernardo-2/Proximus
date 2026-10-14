@@ -119,12 +119,6 @@ class RecordDeliverySettlementAction
                         ]);
                     }
 
-                    if (blank($data['credit_reason'] ?? null)) {
-                        throw ValidationException::withMessages([
-                            'credit_reason' => ['Describe el acuerdo o motivo del crédito.'],
-                        ]);
-                    }
-
                     $customer = Customer::query()->lockForUpdate()->findOrFail($order->customer_id);
                     $this->customerCredit->authorize(
                         customer: $customer,
@@ -135,8 +129,8 @@ class RecordDeliverySettlementAction
                         runOrder: $lockedRunOrder,
                         overrideReason: $data['credit_override_reason'] ?? null,
                     );
-                    $profile = $customer->creditProfile()->firstOrFail();
-                    $termDays = $profile->term_days + $profile->grace_days;
+                    $profile = $customer->creditProfile()->first();
+                    $termDays = ($profile?->term_days ?? 0) + ($profile?->grace_days ?? 0);
 
                     $receivable = CustomerReceivable::query()->create([
                         'customer_id' => $order->customer_id,
@@ -152,7 +146,7 @@ class RecordDeliverySettlementAction
                         'issued_at' => $settledAt->toDateString(),
                         'due_date' => $settledAt->copy()->addDays($termDays)->toDateString(),
                         'term_days' => $termDays,
-                        'notes' => $data['credit_reason'],
+                        'notes' => $data['credit_reason'] ?? null,
                         'created_by' => $actor->id,
                     ]);
                     $settlement->lines()->create([
@@ -220,7 +214,7 @@ class RecordDeliverySettlementAction
                 'status' => $finalStatus,
                 'collected_total' => $collectedTotal,
                 'balance_due' => $creditTotal,
-                'credit_reason' => $creditTotal === '0.0000' ? null : $data['credit_reason'],
+                'credit_reason' => $creditTotal === '0.0000' ? null : ($data['credit_reason'] ?? null),
                 'completed_at' => $settledAt,
                 'completed_by' => $actor->id,
             ])->save();

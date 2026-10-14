@@ -8,6 +8,7 @@
 @section('content')
     <form method="POST" action="{{ route('orders.store') }}" class="space-y-6" data-order-create-form>
         @csrf
+        <x-location-fields />
         <section class="card p-5 sm:p-7">
             <div class="mb-6">
                 <p class="text-xs font-semibold tracking-[0.14em] text-leaf-700 uppercase">Paso 1 de 2</p>

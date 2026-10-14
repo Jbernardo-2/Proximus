@@ -154,6 +154,11 @@ class User extends Authenticatable
         return $this->is_active && $this->role->canViewDeliveries();
     }
 
+    public function canViewReports(): bool
+    {
+        return $this->is_active && $this->role->canViewReports();
+    }
+
     public function canViewRouteReports(): bool
     {
         return $this->is_active && $this->role->canViewRouteReports();

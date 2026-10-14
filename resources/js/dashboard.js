@@ -73,3 +73,12 @@ document.querySelectorAll('[data-trend-chart]').forEach((chart) => {
         });
     });
 });
+
+document.querySelectorAll('[data-report-filters]').forEach((form) => {
+    const period = form.querySelector('[data-report-period]');
+    const customRange = form.querySelectorAll('[data-report-custom-range]');
+
+    period.addEventListener('change', () => {
+        customRange.forEach((field) => field.classList.toggle('hidden', period.value !== 'custom'));
+    });
+});

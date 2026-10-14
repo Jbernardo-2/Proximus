@@ -17,6 +17,9 @@ class PriceTier extends Model
     /** @use HasFactory<PriceTierFactory> */
     use HasFactory, HasUlids, SoftDeletes;
 
+    /** @var list<string> Keeps the product's sync version current when a price changes. */
+    protected $touches = ['presentation'];
+
     public function presentation(): BelongsTo
     {
         return $this->belongsTo(ProductPresentation::class, 'product_presentation_id');

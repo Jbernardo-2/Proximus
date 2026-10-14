@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreateOrderAction;
+use App\Actions\RecordCustomerVisitAction;
 use App\Actions\UpdateOrderAction;
+use App\CustomerVisitType;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\UpdateOrderRequest;
 use App\Models\Customer;
@@ -123,11 +125,15 @@ class OrderController extends Controller
         ]);
     }
 
-    public function store(StoreOrderRequest $request, CreateOrderAction $createOrder): RedirectResponse
-    {
+    public function store(
+        StoreOrderRequest $request,
+        CreateOrderAction $createOrder,
+        RecordCustomerVisitAction $recordVisit,
+    ): RedirectResponse {
         /** @var User $user */
         $user = $request->user();
         $order = $createOrder->handle($request->validated(), $user);
+        $recordVisit->forRequest($request, CustomerVisitType::OrderTaken, $order->customer_id, $order);
 
         return redirect()->route('orders.show', $order)->with('success', 'Pedido creado como borrador.');
     }

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CompleteDeliveryStopAction;
+use App\Actions\RecordCustomerVisitAction;
+use App\CustomerVisitType;
 use App\DeliveryOrderStatus;
 use App\Http\Requests\CompleteDeliveryStopRequest;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunOrder;
 use App\Models\User;
+use App\Services\VisitLocation;
 use Illuminate\Http\RedirectResponse;
 
 class CompleteDeliveryStopController extends Controller
@@ -17,11 +20,18 @@ class CompleteDeliveryStopController extends Controller
         DeliveryRun $deliveryRun,
         DeliveryRunOrder $runOrder,
         CompleteDeliveryStopAction $completeStop,
+        RecordCustomerVisitAction $recordVisit,
     ): RedirectResponse {
         /** @var User $user */
         $user = $request->user();
-        $data = $request->safe()->except('items');
+        $location = VisitLocation::fromRequest($request);
+        $data = [
+            ...$request->safe()->except('items'),
+            'latitude' => $request->validated('latitude') ?? $location->latitude,
+            'longitude' => $request->validated('longitude') ?? $location->longitude,
+        ];
         $result = $completeStop->handle($deliveryRun, $runOrder, $data, $request->validated('items'), $user);
+        $recordVisit->forRequest($request, CustomerVisitType::Delivery, $result->order->customer_id, $result);
 
         if ($result->status === DeliveryOrderStatus::AwaitingPayment) {
             return redirect()->to(route('delivery-runs.show', $deliveryRun).'#stop-'.$result->id)

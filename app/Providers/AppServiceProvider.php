@@ -22,6 +22,7 @@ use App\Policies\OrderPolicy;
 use App\Policies\SalesRoutePolicy;
 use App\Policies\VehiclePolicy;
 use App\Policies\WarehousePolicy;
+use App\Services\OfflineSync;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -40,7 +41,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->scoped(OfflineSync::class);
     }
 
     /**
@@ -66,6 +67,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('adjust-inventory', fn (User $user): bool => $user->canAdjustInventory());
         Gate::define('configure-inventory', fn (User $user): bool => $user->canConfigureInventory());
         Gate::define('view-deliveries', fn (User $user): bool => $user->canViewDeliveries());
+        Gate::define('view-reports', fn (User $user): bool => $user->canViewReports());
         Gate::define('view-route-reports', fn (User $user): bool => $user->canViewRouteReports());
         Gate::define('manage-deliveries', fn (User $user): bool => $user->canManageDeliveries());
         Gate::define('prepare-deliveries', fn (User $user): bool => $user->canPrepareDeliveries());
@@ -99,6 +101,10 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('api', function (Request $request): Limit {
+            if ($request->attributes->get('sync_operation') === true) {
+                return Limit::none();
+            }
+
             $key = $request->user() === null
                 ? 'ip:'.$request->ip()
                 : 'user:'.$request->user()->getAuthIdentifier();

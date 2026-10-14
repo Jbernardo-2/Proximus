@@ -116,6 +116,11 @@ enum UserRole: string
         return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero, self::Repartidor], true);
     }
 
+    public function canViewReports(): bool
+    {
+        return in_array($this, [self::Admin, self::Supervisor], true);
+    }
+
     public function canViewRouteReports(): bool
     {
         return true;

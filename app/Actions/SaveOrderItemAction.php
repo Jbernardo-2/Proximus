@@ -7,6 +7,7 @@ use App\Models\OrderItem;
 use App\Models\ProductPresentation;
 use App\Models\User;
 use App\OrderPriceSource;
+use App\Services\OfflineSync;
 use App\Services\PresentationPriceResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,7 @@ class SaveOrderItemAction
     public function __construct(
         private PresentationPriceResolver $priceResolver,
         private RecalculateOrderTotalsAction $recalculateTotals,
+        private OfflineSync $offline,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -67,7 +69,9 @@ class SaveOrderItemAction
             $hasOverride = $requestedPrice !== null
                 && bccomp((string) $requestedPrice, $standardPrice, 4) !== 0;
 
-            if ($hasOverride && ! $mayOverridePrice) {
+            if ($hasOverride && $this->offline->isActive()) {
+                $data['override_reason'] = $data['override_reason'] ?? null ?: 'Precio con el que se tomó el pedido sin conexión.';
+            } elseif ($hasOverride && ! $mayOverridePrice) {
                 throw new AuthorizationException('No tienes permiso para cambiar el precio calculado.');
             }
 

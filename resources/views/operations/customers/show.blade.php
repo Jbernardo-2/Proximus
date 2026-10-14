@@ -138,7 +138,7 @@
                 @if($openReceivables->isNotEmpty())
                     <div class="border-b border-stone-100 p-5 sm:p-7">
                         <div class="mb-4"><h3 class="font-black text-ink-950">Registrar abono</h3><p class="text-sm text-ink-600">Indica cuánto recibiste y distribúyelo entre una o varias deudas. El sistema no permite aplicar más del saldo vigente.</p></div>
-                        <form method="POST" action="{{ route('customers.payments.store', $customer) }}" class="space-y-5" data-customer-payment-form data-currency="{{ $currency }}">
+                        <form method="POST" action="{{ route('customers.payments.store', $customer) }}" class="space-y-5" data-customer-payment-form data-currency="{{ $currency }}"><x-location-fields />
                             @csrf
                             <input name="amount" type="hidden" value="0" data-customer-payment-total-input>
                             <div class="space-y-3">
@@ -231,6 +231,20 @@
                     @endif
                 </div>
             </section>
+
+            @can('manage-orders')
+                <section class="card p-5 sm:p-7">
+                    <h2 class="font-bold text-ink-950">Visita sin pedido</h2>
+                    <p class="text-sm text-ink-600">Deja constancia de la visita cuando el cliente no compra.</p>
+                    <form method="POST" action="{{ route('customers.visits.store', $customer) }}" class="mt-4 grid gap-4 sm:grid-cols-[14rem_minmax(0,1fr)_auto]">
+                        @csrf
+                        <x-location-fields />
+                        <div><label class="form-label" for="visit-reason">Motivo *</label><select class="form-input" id="visit-reason" name="reason" required><option value="">Selecciona…</option>@foreach(\App\CustomerVisitReason::cases() as $visitReason)<option value="{{ $visitReason->value }}" @selected(old('reason') === $visitReason->value)>{{ $visitReason->label() }}</option>@endforeach</select></div>
+                        <div><label class="form-label" for="visit-notes">Observaciones</label><input class="form-input" id="visit-notes" name="notes" maxlength="1000" value="{{ old('notes') }}"></div>
+                        <div class="flex items-end"><button class="btn-secondary w-full" type="submit">Registrar visita</button></div>
+                    </form>
+                </section>
+            @endcan
 
             <section class="card overflow-hidden">
                 <div class="border-b border-stone-100 px-5 py-4">

@@ -89,10 +89,6 @@ class StoreDeliverySettlementRequest extends DeliveryRequest
                     $validator->errors()->add('allocations', 'Agrega el crédito en una sola línea.');
                 }
 
-                if ($creditLines > 0 && blank($this->input('credit_reason'))) {
-                    $validator->errors()->add('credit_reason', 'Describe el acuerdo o motivo del crédito.');
-                }
-
                 $runOrder = $this->route('runOrder');
 
                 if ($runOrder instanceof DeliveryRunOrder
