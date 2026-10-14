@@ -11,6 +11,7 @@ use App\Services\RouteReportService;
 use App\UserRole;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Response;
@@ -24,6 +25,75 @@ class RouteReportController extends Controller
         /** @var User $user */
         $user = $request->user();
         $filters = $request->validated();
+        [$query, $reportsByRun] = $this->runReports($user, $filters);
+
+        return view('reports.routes.index', [
+            'deliveryRuns' => $query,
+            'reportsByRun' => $reportsByRun,
+            'filters' => $filters,
+            'statuses' => DeliveryRunStatus::cases(),
+            'salesRoutes' => $this->availableRoutes($user),
+            'salespeople' => User::query()
+                ->where('role', UserRole::Preventista)
+                ->where('is_active', true)
+                ->when($user->role === UserRole::Preventista, fn (Builder $users): Builder => $users->whereKey($user->id))
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'drivers' => User::query()
+                ->where('role', UserRole::Repartidor)
+                ->where('is_active', true)
+                ->when($user->role === UserRole::Repartidor, fn (Builder $users): Builder => $users->whereKey($user->id))
+                ->orderBy('name')
+                ->get(['id', 'name']),
+        ]);
+    }
+
+    public function print(
+        DeliveryRun $deliveryRun,
+        SalesRoute $salesRoute,
+        RouteReportService $routeReportService,
+    ): View {
+        Gate::authorize('viewRouteReport', [$deliveryRun, $salesRoute]);
+
+        return view('reports.routes.document', [
+            ...$routeReportService->data($deliveryRun, $salesRoute),
+            'isPdf' => false,
+        ]);
+    }
+
+    public function download(
+        DeliveryRun $deliveryRun,
+        SalesRoute $salesRoute,
+        RouteReportService $routeReportService,
+    ): Response {
+        Gate::authorize('viewRouteReport', [$deliveryRun, $salesRoute]);
+
+        $html = view('reports.routes.document', [
+            ...$routeReportService->data($deliveryRun, $salesRoute),
+            'isPdf' => true,
+        ])->render();
+        $options = new Options;
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('isRemoteEnabled', false);
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper('letter', 'portrait');
+        $dompdf->render();
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$routeReportService->filename($deliveryRun, $salesRoute).'"',
+        ]);
+    }
+
+    /**
+     * Delivery runs the user may see, each with the sales routes it has a report for.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{0: LengthAwarePaginator, 1: \Illuminate\Support\Collection<string, \Illuminate\Support\Collection<int, array{route: SalesRoute, orders_count: int}>>}
+     */
+    protected function runReports(User $user, array $filters): array
+    {
         $query = DeliveryRun::query()
             ->whereHas('runOrders.order', fn (Builder $orders): Builder => $orders->whereNotNull('sales_route_id'))
             ->when(
@@ -110,67 +180,11 @@ class RouteReportController extends Controller
             return [$deliveryRun->id => $routes];
         });
 
-        return view('reports.routes.index', [
-            'deliveryRuns' => $query,
-            'reportsByRun' => $reportsByRun,
-            'filters' => $filters,
-            'statuses' => DeliveryRunStatus::cases(),
-            'salesRoutes' => $this->availableRoutes($user),
-            'salespeople' => User::query()
-                ->where('role', UserRole::Preventista)
-                ->where('is_active', true)
-                ->when($user->role === UserRole::Preventista, fn (Builder $users): Builder => $users->whereKey($user->id))
-                ->orderBy('name')
-                ->get(['id', 'name']),
-            'drivers' => User::query()
-                ->where('role', UserRole::Repartidor)
-                ->where('is_active', true)
-                ->when($user->role === UserRole::Repartidor, fn (Builder $users): Builder => $users->whereKey($user->id))
-                ->orderBy('name')
-                ->get(['id', 'name']),
-        ]);
-    }
-
-    public function print(
-        DeliveryRun $deliveryRun,
-        SalesRoute $salesRoute,
-        RouteReportService $routeReportService,
-    ): View {
-        Gate::authorize('viewRouteReport', [$deliveryRun, $salesRoute]);
-
-        return view('reports.routes.document', [
-            ...$routeReportService->data($deliveryRun, $salesRoute),
-            'isPdf' => false,
-        ]);
-    }
-
-    public function download(
-        DeliveryRun $deliveryRun,
-        SalesRoute $salesRoute,
-        RouteReportService $routeReportService,
-    ): Response {
-        Gate::authorize('viewRouteReport', [$deliveryRun, $salesRoute]);
-
-        $html = view('reports.routes.document', [
-            ...$routeReportService->data($deliveryRun, $salesRoute),
-            'isPdf' => true,
-        ])->render();
-        $options = new Options;
-        $options->set('defaultFont', 'DejaVu Sans');
-        $options->set('isRemoteEnabled', false);
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html, 'UTF-8');
-        $dompdf->setPaper('letter', 'portrait');
-        $dompdf->render();
-
-        return response($dompdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$routeReportService->filename($deliveryRun, $salesRoute).'"',
-        ]);
+        return [$query, $reportsByRun];
     }
 
     /** @return Collection<int, SalesRoute> */
-    private function availableRoutes(User $user): Collection
+    protected function availableRoutes(User $user): Collection
     {
         return SalesRoute::query()
             ->withTrashed()

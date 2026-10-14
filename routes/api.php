@@ -7,23 +7,33 @@ use App\Http\Controllers\Api\V1\CancelInventoryCountController;
 use App\Http\Controllers\Api\V1\CancelInventoryDocumentController;
 use App\Http\Controllers\Api\V1\CancelOrderController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\CompanyProfileController;
 use App\Http\Controllers\Api\V1\CompleteDeliveryStopController;
 use App\Http\Controllers\Api\V1\ConfirmDeliveryLoadController;
 use App\Http\Controllers\Api\V1\ConfirmOrderController;
+use App\Http\Controllers\Api\V1\CreditPortfolioController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerCreditController;
+use App\Http\Controllers\Api\V1\CustomerCreditProfileController;
+use App\Http\Controllers\Api\V1\CustomerOpeningBalanceController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
+use App\Http\Controllers\Api\V1\CustomerPaymentReceiptController;
+use App\Http\Controllers\Api\V1\CustomerPaymentReversalController;
 use App\Http\Controllers\Api\V1\CustomerVisitController;
+use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\DeliveryInvoiceController;
 use App\Http\Controllers\Api\V1\DeliveryPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryRunController;
 use App\Http\Controllers\Api\V1\DeliveryRunOrderController;
 use App\Http\Controllers\Api\V1\DepartDeliveryRunController;
+use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\InventoryCountController;
 use App\Http\Controllers\Api\V1\InventoryDocumentController;
 use App\Http\Controllers\Api\V1\InventoryDocumentItemController;
 use App\Http\Controllers\Api\V1\InventoryMovementController;
 use App\Http\Controllers\Api\V1\InventoryStockController;
 use App\Http\Controllers\Api\V1\MeasurementUnitController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\OrderConversionSuggestionController;
 use App\Http\Controllers\Api\V1\OrderItemController;
@@ -37,7 +47,10 @@ use App\Http\Controllers\Api\V1\ProductPresentationController;
 use App\Http\Controllers\Api\V1\ProductSupplierController;
 use App\Http\Controllers\Api\V1\ReopenDeliveryStopController;
 use App\Http\Controllers\Api\V1\ReopenOrderController;
+use App\Http\Controllers\Api\V1\ReplenishInventoryStockController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RequeueDeliveryOrderController;
+use App\Http\Controllers\Api\V1\RouteReportController;
 use App\Http\Controllers\Api\V1\RouteStopController;
 use App\Http\Controllers\Api\V1\SalesRouteController;
 use App\Http\Controllers\Api\V1\SettleDeliveryRunController;
@@ -66,8 +79,37 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
             Route::post('/push', [SyncController::class, 'push'])->name('push');
         });
 
+        Route::middleware('can:access-panel')->group(function (): void {
+            Route::get('/dashboard', DashboardController::class)->name('dashboard');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+            Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+            Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
+        });
+
+        Route::middleware(['abilities:reports:view', 'can:access-panel', 'can:view-reports'])->prefix('reports')->name('reports.')->group(function (): void {
+            Route::get('/', [ReportController::class, 'catalog'])->name('index');
+            Route::get('/{report}', [ReportController::class, 'data'])->name('show');
+            Route::get('/{report}/download', [ReportController::class, 'download'])->name('download');
+            Route::get('/{report}/export', [ReportController::class, 'export'])->name('export');
+        });
+
+        Route::middleware(['abilities:route-reports:view', 'can:access-panel', 'can:view-route-reports'])->prefix('route-reports')->name('route-reports.')->group(function (): void {
+            Route::get('/', [RouteReportController::class, 'list'])->name('index');
+            Route::get('/{deliveryRun}/{salesRoute}/download', [RouteReportController::class, 'download'])
+                ->withTrashed()
+                ->name('download');
+        });
+
+        Route::middleware(['abilities:company:manage', 'can:manage-company-profile'])->group(function (): void {
+            Route::get('/company', [CompanyProfileController::class, 'show'])->name('company.show');
+            Route::post('/company', [CompanyProfileController::class, 'update'])->name('company.update');
+        });
+
         Route::middleware(['abilities:users:manage', 'can:manage-users'])->group(function (): void {
             Route::apiResource('users', UserController::class)->except('destroy');
+            Route::get('/devices', [DeviceController::class, 'index'])->name('devices.index');
+            Route::post('/devices/{device}/revoke', [DeviceController::class, 'revoke'])->name('devices.revoke');
+            Route::post('/devices/{device}/restore', [DeviceController::class, 'restore'])->name('devices.restore');
         });
 
         Route::middleware(['abilities:customers:manage', 'can:manage-customers'])->group(function (): void {
@@ -77,6 +119,23 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
         Route::middleware(['abilities:credits:view', 'can:view-customer-credit'])->group(function (): void {
             Route::get('/customers/{customer}/credit', CustomerCreditController::class)
                 ->name('customers.credit.show');
+            Route::get('/credits', [CreditPortfolioController::class, 'index'])->name('credits.index');
+            Route::get('/customers/{customer}/payments/{payment}/receipt', [CustomerPaymentReceiptController::class, 'details'])
+                ->name('customers.payments.receipt.show');
+            Route::get('/customers/{customer}/payments/{payment}/receipt/download', [CustomerPaymentReceiptController::class, 'download'])
+                ->name('customers.payments.receipt.download');
+        });
+
+        Route::middleware(['abilities:credits:configure', 'can:configure-customer-credit'])->group(function (): void {
+            Route::put('/customers/{customer}/credit-profile', CustomerCreditProfileController::class)
+                ->name('customers.credit-profile.update');
+            Route::post('/customers/{customer}/opening-balances', CustomerOpeningBalanceController::class)
+                ->name('customers.opening-balances.store');
+        });
+
+        Route::middleware(['abilities:payments:reverse', 'can:reverse-customer-payments'])->group(function (): void {
+            Route::post('/customers/{customer}/payments/{payment}/reversal', CustomerPaymentReversalController::class)
+                ->name('customers.payments.reverse');
         });
 
         Route::middleware(['abilities:payments:record', 'can:record-customer-payments'])->group(function (): void {
@@ -142,6 +201,12 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
         Route::middleware(['abilities:deliveries:view', 'can:view-deliveries'])->group(function (): void {
             Route::get('/delivery-runs', [DeliveryRunController::class, 'index'])->name('delivery-runs.index');
             Route::get('/delivery-runs/{deliveryRun}', [DeliveryRunController::class, 'show'])->name('delivery-runs.show');
+            Route::scopeBindings()->group(function (): void {
+                Route::get('/delivery-runs/{deliveryRun}/orders/{runOrder}/invoice', [DeliveryInvoiceController::class, 'details'])
+                    ->name('delivery-runs.orders.invoice.show');
+                Route::get('/delivery-runs/{deliveryRun}/orders/{runOrder}/invoice/download', [DeliveryInvoiceController::class, 'download'])
+                    ->name('delivery-runs.orders.invoice.download');
+            });
             Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles.index');
             Route::get('/vehicles/{vehicle}', [VehicleController::class, 'show'])->name('vehicles.show');
         });
@@ -212,6 +277,8 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
         });
 
         Route::middleware(['abilities:inventory:operate', 'can:operate-inventory'])->group(function (): void {
+            Route::post('/inventory/stocks/{inventoryStock}/replenishments', ReplenishInventoryStockController::class)
+                ->name('inventory.stocks.replenishments.store');
             Route::get('/inventory/movements', [InventoryMovementController::class, 'index'])->name('inventory.movements.index');
             Route::get('/inventory/movements/{inventoryMovement}', [InventoryMovementController::class, 'show'])->name('inventory.movements.show');
 

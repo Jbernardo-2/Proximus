@@ -260,6 +260,18 @@ enum UserRole: string
             $abilities[] = 'users:manage';
         }
 
+        if ($this->canViewReports()) {
+            $abilities[] = 'reports:view';
+        }
+
+        if ($this->canViewRouteReports()) {
+            $abilities[] = 'route-reports:view';
+        }
+
+        if ($this->canManageCompanyProfile()) {
+            $abilities[] = 'company:manage';
+        }
+
         return $abilities;
     }
 }

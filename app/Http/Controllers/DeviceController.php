@@ -9,9 +9,7 @@ use App\Models\User;
 use App\SecurityEvent;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
-use Laravel\Sanctum\PersonalAccessToken;
 
 class DeviceController extends Controller
 {
@@ -42,17 +40,7 @@ class DeviceController extends Controller
         /** @var User $actor */
         $actor = $request->user();
 
-        DB::transaction(function () use ($device, $actor): void {
-            if ($device->personal_access_token_id !== null) {
-                PersonalAccessToken::query()->whereKey($device->personal_access_token_id)->delete();
-            }
-
-            $device->forceFill([
-                'personal_access_token_id' => null,
-                'revoked_at' => now(),
-                'revoked_by' => $actor->id,
-            ])->save();
-        });
+        $device->revoke($actor);
         $recordSecurityEvent->handle(SecurityEvent::DeviceRevoked, $request, actor: $actor, subject: $device, metadata: ['device_code' => $device->code]);
 
         return back()->with('success', "Teléfono {$device->code} bloqueado. Su sesión se cerró.");
@@ -62,7 +50,7 @@ class DeviceController extends Controller
     {
         /** @var User $actor */
         $actor = $request->user();
-        $device->forceFill(['revoked_at' => null, 'revoked_by' => null])->save();
+        $device->restore();
         $recordSecurityEvent->handle(SecurityEvent::DeviceRestored, $request, actor: $actor, subject: $device, metadata: ['device_code' => $device->code]);
 
         return back()->with('success', "Teléfono {$device->code} reactivado. Ya puede iniciar sesión.");

@@ -69,6 +69,27 @@ class Device extends Model
         return $this->hasMany(SyncOperation::class);
     }
 
+    /** Signs the phone out at once and keeps it from signing in again until restored. */
+    public function revoke(User $actor): void
+    {
+        DB::transaction(function () use ($actor): void {
+            if ($this->personal_access_token_id !== null) {
+                PersonalAccessToken::query()->whereKey($this->personal_access_token_id)->delete();
+            }
+
+            $this->forceFill([
+                'personal_access_token_id' => null,
+                'revoked_at' => now(),
+                'revoked_by' => $actor->id,
+            ])->save();
+        });
+    }
+
+    public function restore(): void
+    {
+        $this->forceFill(['revoked_at' => null, 'revoked_by' => null])->save();
+    }
+
     public function isRevoked(): bool
     {
         return $this->revoked_at !== null;

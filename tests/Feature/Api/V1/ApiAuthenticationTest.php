@@ -57,7 +57,7 @@ class ApiAuthenticationTest extends TestCase
         ]);
         $accessToken = $user->tokens()->firstOrFail();
         $this->assertSame(
-            ['catalog:manage', 'customers:manage', 'credits:view', 'credits:configure', 'payments:record', 'payments:reverse', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage', 'users:manage'],
+            ['catalog:manage', 'customers:manage', 'credits:view', 'credits:configure', 'payments:record', 'payments:reverse', 'routes:view', 'routes:manage', 'orders:view', 'orders:manage', 'orders:override', 'orders:lifecycle', 'inventory:view', 'inventory:operate', 'inventory:adjust', 'inventory:configure', 'deliveries:view', 'deliveries:manage', 'deliveries:prepare', 'deliveries:execute', 'deliveries:settle', 'vehicles:manage', 'users:manage', 'reports:view', 'route-reports:view', 'company:manage'],
             $accessToken->abilities,
         );
         $this->assertNotNull($accessToken->expires_at);

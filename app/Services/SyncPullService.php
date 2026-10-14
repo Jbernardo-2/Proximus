@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\CustomerReceivableStatus;
 use App\DeliveryRunStatus;
+use App\Http\Resources\Api\V1\CustomerReceivableResource;
 use App\Http\Resources\Api\V1\DeliveryRunResource;
 use App\Models\Customer;
 use App\Models\CustomerCreditProfile;
@@ -195,6 +196,14 @@ class SyncPullService
                 'allowed' => $takesOrders,
                 'query' => fn (User $user): Builder => $this->visibleCustomers($user)->with('creditProfile'),
                 'map' => fn (Collection $customers): array => $this->creditBalances($customers),
+            ],
+            'receivables' => [
+                'mode' => 'full',
+                'allowed' => fn (User $user): bool => $takesOrders($user) && Gate::forUser($user)->allows('record-customer-payments'),
+                'query' => fn (User $user): Builder => CustomerReceivable::query()
+                    ->outstanding()
+                    ->whereIn('customer_id', $this->visibleCustomers($user)->select('customers.id')),
+                'map' => fn (Collection $receivables): array => CustomerReceivableResource::collection($receivables)->resolve(),
             ],
             'delivery_runs' => [
                 'mode' => 'full',

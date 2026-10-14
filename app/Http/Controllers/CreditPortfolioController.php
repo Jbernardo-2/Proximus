@@ -14,6 +14,12 @@ class CreditPortfolioController extends Controller
 {
     public function __invoke(Request $request): View
     {
+        return view('operations.credits.index', $this->portfolio($request));
+    }
+
+    /** @return array<string, mixed> */
+    protected function portfolio(Request $request): array
+    {
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->trim()->toString();
         $overdueOnly = $request->boolean('overdue');
@@ -63,7 +69,7 @@ class CreditPortfolioController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('operations.credits.index', [
+        return [
             'customers' => $customers,
             'search' => $search,
             'selectedStatus' => $status,
@@ -80,6 +86,6 @@ class CreditPortfolioController extends Controller
                 ->whereIn('status', $outstandingStatuses)
                 ->distinct('customer_id')
                 ->count('customer_id'),
-        ]);
+        ];
     }
 }

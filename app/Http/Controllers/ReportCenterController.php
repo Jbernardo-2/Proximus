@@ -123,7 +123,7 @@ class ReportCenterController extends Controller
         ]);
     }
 
-    private function report(ReportRegistry $registry, string $key): Report
+    protected function report(ReportRegistry $registry, string $key): Report
     {
         return $registry->find($key) ?? abort(404);
     }
@@ -162,7 +162,7 @@ class ReportCenterController extends Controller
     }
 
     /** @return array<string, float> */
-    private function totals(Report $report, ReportFilters $filters): array
+    protected function totals(Report $report, ReportFilters $filters): array
     {
         $query = $report->query($filters);
         $keys = collect($report->columns())->filter(fn (array $column): bool => $column['total'] ?? false)->pluck('key');
@@ -180,7 +180,7 @@ class ReportCenterController extends Controller
     }
 
     /** @return array<string, array{label: string, items: array<string, string>}> */
-    private function options(Report $report): array
+    protected function options(Report $report): array
     {
         $sources = [
             'route' => ['Ruta', fn (): array => SalesRoute::query()->orderBy('name')->pluck('name', 'id')->all()],
@@ -210,7 +210,7 @@ class ReportCenterController extends Controller
         return "{$report->key()}-{$filters->from->format('Ymd')}-{$filters->to->format('Ymd')}.{$extension}";
     }
 
-    private function currency(): string
+    protected function currency(): string
     {
         return mb_strtoupper((string) config('proximus.currency', 'HNL'));
     }

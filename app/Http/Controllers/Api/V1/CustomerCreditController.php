@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Api\V1\CustomerAccountEntryResource;
+use App\Http\Resources\Api\V1\CustomerReceivableResource;
 use App\Models\Customer;
+use App\Models\CustomerReceivable;
 use App\Services\CustomerCreditService;
 use Illuminate\Http\JsonResponse;
 
@@ -24,6 +27,12 @@ class CustomerCreditController extends Controller
                     'grace_days' => $customer->creditProfile->grace_days,
                 ],
                 'summary' => $creditService->summary($customer),
+                'open_receivables' => CustomerReceivableResource::collection(
+                    CustomerReceivable::query()->whereBelongsTo($customer)->outstanding()->orderBy('due_date')->orderBy('id')->get(),
+                )->resolve(),
+                'recent_entries' => CustomerAccountEntryResource::collection(
+                    $customer->accountEntries()->latest('occurred_at')->orderByDesc('id')->limit(30)->get(),
+                )->resolve(),
             ],
         ]);
     }

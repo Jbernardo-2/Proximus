@@ -81,6 +81,7 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
     "routes":          { "mode": "full",  "available": false },
     "customers":       { "mode": "full",  "available": false },
     "customer_credit": { "mode": "full",  "available": false },
+    "receivables":     { "mode": "full",  "available": false },
     "delivery_runs":   { "mode": "full",  "available": true }
   },
   "operations": ["order.create", "visit.no_sale", "delivery.outcome", "delivery.payment", "customer.payment"],
@@ -108,6 +109,7 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
 |---|---|---|---|---|
 | products, stocks | ✓ | ✓ | ✓ | ✓ |
 | routes, customers, customer_credit | ✓ (todos) | ✓ (solo sus rutas) | — | — |
+| receivables | ✓ (todos) | — | — | — |
 | delivery_runs | ✓ (todas las abiertas) | — | ✓ (solo las suyas) | según permisos |
 
 ---
@@ -139,7 +141,7 @@ El cursor es opaco: guárdalo tal cual, no lo interpretes.
 
 Para forzar una descarga completa (reinstalación o datos dañados), borra el cursor guardado.
 
-### Modo `full` (routes, customers, customer_credit, delivery_runs)
+### Modo `full` (routes, customers, customer_credit, receivables, delivery_runs)
 
 1. Se pide sin cursor y se recorren todas las páginas igual que en `delta`.
 2. Solo **al terminar todas las páginas**, se reemplaza la tabla local completa por lo recibido. Si la descarga se corta a la mitad, se conserva la tabla anterior.
@@ -176,6 +178,8 @@ Precio sugerido sin conexión (la misma regla que el servidor):
 **customers**: `id`, `code`, `business_name`, `business_type`, `contact_name`, `phone`, `whatsapp`, `address`, `reference`, `latitude`, `longitude`.
 
 **customer_credit**: `customer_id`, `status`, `allows_credit`, `credit_limit`, `term_days`, `grace_days`, `outstanding`, `overdue`, `committed`, `available_credit`. Sin conexión, la app resta de `available_credit` el crédito que ya otorgó localmente desde la última descarga.
+
+**receivables**: deudas abiertas de los clientes visibles, para aplicar abonos sin conexión. Contiene `id`, `customer_id`, `source`, `document_number`, `order_id`, `original_amount`, `outstanding_amount`, `currency`, `status`, `status_label`, `issued_at`, `due_date`, `is_overdue` y `notes`. Solo está disponible para quien puede registrar abonos. Sin conexión, la app resta de `outstanding_amount` lo que ya abonó localmente.
 
 **delivery_runs**: el mismo formato que `GET /api/v1/delivery-runs/{id}`. Incluye la jornada, el vehículo, las paradas (`run_orders`) en orden de visita, los productos cargados con su precio y los pagos registrados.
 
@@ -434,3 +438,42 @@ Lo que **sí** se rechaza aunque venga sin conexión: datos inválidos, falta de
 
 - Una parada con resultado o cobro en cola no se sobrescribe con lo descargado hasta que su operación se acepte.
 - Un pedido creado sin conexión se muestra con su `client_reference` hasta tener `order_number`.
+
+---
+
+## 9. Funciones con conexión
+
+Todo lo que hace la web está disponible en la API. Estas funciones **requieren señal** y no pasan por la cola. Cada endpoint exige el permiso indicado. Si el token no lo tiene, devuelve 403; la app debe ocultar esa sección según `abilities` del login.
+
+Los tokens emitidos antes de esta versión no incluyen `reports:view`, `route-reports:view` ni `company:manage`; basta con volver a iniciar sesión.
+
+| Función | Endpoint | Permiso |
+|---|---|---|
+| Panel según el rol | `GET /dashboard` | cualquier usuario del panel |
+| Notificaciones | `GET /notifications?unread=1&page=`, `POST /notifications/{id}/read`, `POST /notifications/read-all` | cualquier usuario del panel |
+| Catálogo de reportes | `GET /reports` | `reports:view` |
+| Reporte como datos | `GET /reports/{key}?period=&from=&to=&basis=&search=&sort=&direction=&per_page=&<filtro>=` | `reports:view` |
+| Reporte en PDF / CSV | `GET /reports/{key}/download`, `GET /reports/{key}/export` (mismos filtros) | `reports:view` |
+| Reportes de ruta | `GET /route-reports?date_from=&date_to=&route_id=&…`, `GET /route-reports/{jornada}/{ruta}/download` | `route-reports:view` |
+| Cartera de crédito | `GET /credits?search=&status=&overdue=1&page=` | `credits:view` |
+| Crédito del cliente | `GET /customers/{id}/credit`: perfil, resumen, deudas abiertas y últimos 30 movimientos | `credits:view` |
+| Comprobante de abono | `GET /customers/{id}/payments/{abono}/receipt`, `…/receipt/download` | `credits:view` |
+| Política de crédito | `PUT /customers/{id}/credit-profile` (`status`, `credit_limit`, `term_days`, `grace_days`, `reason`) | `credits:configure` |
+| Saldo inicial | `POST /customers/{id}/opening-balances` (`amount`, `issued_at`, `due_date`, `notes`) | `credits:configure` |
+| Revertir abono | `POST /customers/{id}/payments/{abono}/reversal` (`reason`) | `payments:reverse` |
+| Factura de entrega | `GET /delivery-runs/{j}/orders/{p}/invoice`: número, líneas, enlaces de descarga carta y ticket, enlace público de 7 días y enlace de WhatsApp | `deliveries:view` |
+| PDF de la factura | `GET /delivery-runs/{j}/orders/{p}/invoice/download?format=letter\|ticket` | `deliveries:view` |
+| Entrada rápida de inventario | `POST /inventory/stocks/{id}/replenishments` (`quantity`) | `inventory:operate` |
+| Datos de la empresa | `GET /company`, `POST /company` (multipart si incluye `logo`; `remove_logo` obligatorio) | `company:manage` |
+| Teléfonos | `GET /devices`, `POST /devices/{id}/revoke`, `POST /devices/{id}/restore` | `users:manage` |
+
+El resto (catálogo, clientes, rutas, pedidos, jornadas y su preparación, carga, salida y liquidación, inventario, conteos, vehículos y usuarios) ya existía en la API con las mismas rutas que la web, bajo `/api/v1`.
+
+**Formato de un reporte como datos**
+
+- `columns`: lista de columnas con `key`, `label`, `format` (`money`, `quantity`, `integer`, `percent`, `date`, `datetime` o `text`), `sortable` y `total`.
+- `rows`: objetos indexados por `key` de columna. `meta` indica la paginación.
+- `totals`: totales de las columnas que los tienen.
+- `summary`: indicadores con `label`, `value`, `format` y, opcionalmente, `previous` (periodo anterior) y `hint`.
+- `charts`: `title`, `type`, `labels` y `series[]` con `name`, `color` y `values`.
+- `filters.options`: los valores posibles de cada filtro del reporte, para llenar los selectores.
