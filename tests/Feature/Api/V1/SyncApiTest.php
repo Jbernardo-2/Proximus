@@ -2,10 +2,13 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\CustomerAccountEntryStatus;
+use App\CustomerAccountEntryType;
 use App\CustomerVisitType;
 use App\DeliveryOrderStatus;
 use App\DeliveryRunStatus;
 use App\Models\Customer;
+use App\Models\CustomerAccountEntry;
 use App\Models\CustomerCreditAuthorization;
 use App\Models\CustomerCreditProfile;
 use App\Models\CustomerReceivable;
@@ -29,6 +32,7 @@ use App\OrderStatus;
 use App\PaymentTerm;
 use App\SettlementMethod;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -39,6 +43,8 @@ class SyncApiTest extends TestCase
     public function test_manifest_tells_each_role_what_it_can_download(): void
     {
         $preventista = User::factory()->preventista()->create();
+        $warehouse = Warehouse::query()->where('is_default', true)->first()
+            ?? Warehouse::factory()->default()->create();
         Sanctum::actingAs($preventista, $preventista->apiAbilities());
 
         $this->getJson('/api/v1/sync')
@@ -46,11 +52,14 @@ class SyncApiTest extends TestCase
             ->assertJsonPath('user.role', 'preventista')
             ->assertJsonPath('resources.customers.available', true)
             ->assertJsonPath('resources.customers.mode', 'full')
+            ->assertJsonPath('resources.route_activity.available', true)
+            ->assertJsonPath('resources.route_activity.mode', 'full')
             ->assertJsonPath('resources.products.mode', 'delta')
             ->assertJsonPath('resources.delivery_runs.available', false)
+            ->assertJsonPath('default_warehouse.id', $warehouse->id)
             ->assertJsonPath('catalogs.payment_methods.1.value', 'bank_transfer')
             ->assertJsonPath('catalogs.payment_methods.1.requires_reference', false)
-            ->assertJsonFragment(['operations' => ['order.create', 'visit.no_sale', 'delivery.outcome', 'delivery.payment', 'customer.payment']]);
+            ->assertJsonFragment(['operations' => ['customer.create', 'order.create', 'visit.no_sale', 'customer.payment']]);
         $this->getJson('/api/v1/sync/pull/delivery_runs')->assertForbidden();
         $this->getJson('/api/v1/sync/pull/no-existe')->assertNotFound();
 
@@ -58,7 +67,133 @@ class SyncApiTest extends TestCase
         Sanctum::actingAs($driver, $driver->apiAbilities());
         $this->getJson('/api/v1/sync')
             ->assertJsonPath('resources.delivery_runs.available', true)
-            ->assertJsonPath('resources.customers.available', false);
+            ->assertJsonPath('resources.customers.available', false)
+            ->assertJsonPath('resources.route_activity.available', false)
+            ->assertJsonFragment(['operations' => ['delivery.outcome', 'delivery.payment']]);
+    }
+
+    public function test_daily_route_activity_reports_only_todays_assigned_stops_and_latest_result(): void
+    {
+        [$preventista, $customer, $stop] = $this->routeContext();
+        $stop->update(['visit_day' => now()->dayOfWeekIso, 'visit_order' => 2]);
+        $otherRoute = SalesRoute::factory()->create();
+        RouteStop::factory()->for($otherRoute)->create(['visit_day' => now()->dayOfWeekIso]);
+        RouteStop::factory()->create([
+            'sales_route_id' => $stop->sales_route_id,
+            'visit_day' => now()->addDay()->dayOfWeekIso,
+        ]);
+        Sanctum::actingAs($preventista, $preventista->apiAbilities());
+
+        $this->getJson('/api/v1/sync/pull/route_activity')
+            ->assertOk()
+            ->assertJsonCount(1, 'records')
+            ->assertJsonPath('records.0.id', $stop->id)
+            ->assertJsonPath('records.0.customer.id', $customer->id)
+            ->assertJsonPath('records.0.status', 'pending');
+
+        CustomerVisit::factory()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $preventista->id,
+            'type' => CustomerVisitType::NoSale,
+            'occurred_at' => now(),
+        ]);
+        $this->getJson('/api/v1/sync/pull/route_activity')
+            ->assertJsonPath('records.0.status', CustomerVisitType::NoSale->value)
+            ->assertJsonPath('records.0.visit.type', CustomerVisitType::NoSale->value);
+
+        $order = Order::factory()->for($customer)->create([
+            'sales_route_id' => $stop->sales_route_id,
+            'route_stop_id' => $stop->id,
+            'salesperson_id' => $preventista->id,
+            'created_by' => $preventista->id,
+            'order_date' => today(),
+            'total' => '125.5000',
+        ]);
+        $this->getJson('/api/v1/sync/pull/route_activity')
+            ->assertJsonPath('records.0.status', CustomerVisitType::OrderTaken->value)
+            ->assertJsonPath('records.0.order.id', $order->id)
+            ->assertJsonPath('records.0.order.total', '125.5000');
+    }
+
+    public function test_a_customer_registered_offline_can_receive_an_order_in_the_same_queue(): void
+    {
+        [$preventista, , $stop] = $this->routeContext();
+        [, $unit] = $this->product('Café', '30', onHand: '10');
+        Sanctum::actingAs($preventista, $preventista->apiAbilities());
+        $customerId = (string) Str::ulid();
+        $stopId = (string) Str::ulid();
+        $operations = [
+            ['client_reference' => 'tel-7:cliente-1', 'type' => 'customer.create', 'payload' => [
+                'id' => $customerId,
+                'business_name' => 'Pulpería Nueva',
+                'address' => 'Colonia Kennedy, bloque 3',
+                'is_active' => true,
+                'route_stop' => ['id' => $stopId, 'visit_day' => now()->dayOfWeekIso],
+            ]],
+            ['client_reference' => 'tel-7:pedido-nuevo', 'type' => 'order.create', 'payload' => [
+                'customer_id' => $customerId,
+                'route_stop_id' => $stopId,
+                'order_date' => today()->toDateString(),
+                'payment_term' => PaymentTerm::Cash->value,
+                'confirm' => true,
+                'items' => [['product_presentation_id' => $unit->id, 'quantity' => '2', 'unit_price' => '30']],
+            ]],
+        ];
+
+        $this->postJson('/api/v1/sync/push', ['operations' => $operations])
+            ->assertOk()
+            ->assertJsonPath('results.0.status', 'accepted')
+            ->assertJsonPath('results.1.status', 'accepted');
+
+        $customer = Customer::query()->findOrFail($customerId);
+        $this->assertMatchesRegularExpression('/^CLI-\d+$/', $customer->code);
+        $this->assertDatabaseHas('route_stops', ['id' => $stopId, 'customer_id' => $customerId, 'sales_route_id' => $stop->sales_route_id]);
+        $this->assertSame('60.0000', Order::query()->where('customer_id', $customerId)->sole()->total);
+
+        $operations[0]['client_reference'] = 'tel-7:cliente-1-reintento';
+        $this->postJson('/api/v1/sync/push', ['operations' => $operations])
+            ->assertJsonPath('results.0.status', 'accepted')
+            ->assertJsonPath('results.0.data.id', $customerId)
+            ->assertJsonPath('results.1.status', 'duplicate');
+        $this->assertSame(1, Customer::query()->where('business_name', 'Pulpería Nueva')->count());
+    }
+
+    public function test_route_activity_reports_order_and_payment_of_the_same_customer(): void
+    {
+        [$preventista, $customer, $stop] = $this->routeContext();
+        $stop->update(['visit_day' => now()->dayOfWeekIso]);
+        Order::factory()->for($customer)->create([
+            'route_stop_id' => $stop->id, 'salesperson_id' => $preventista->id, 'created_by' => $preventista->id,
+            'order_date' => today(), 'total' => '100.0000',
+        ]);
+        CustomerAccountEntry::factory()->create([
+            'customer_id' => $customer->id, 'type' => CustomerAccountEntryType::CustomerPayment, 'status' => CustomerAccountEntryStatus::Active,
+            'credit_amount' => '40.0000', 'debit_amount' => '0.0000', 'created_by' => $preventista->id, 'occurred_at' => now(),
+        ]);
+        Sanctum::actingAs($preventista, $preventista->apiAbilities());
+
+        $this->getJson('/api/v1/sync/pull/route_activity')
+            ->assertJsonPath('records.0.status', 'order_taken')
+            ->assertJsonPath('records.0.has_order', true)
+            ->assertJsonPath('records.0.has_payment', true)
+            ->assertJsonPath('records.0.has_no_sale', false)
+            ->assertJsonPath('records.0.orders_total', '100.0000')
+            ->assertJsonPath('records.0.payments_total', '40.0000');
+    }
+
+    public function test_preventista_customer_access_is_limited_to_active_assigned_routes(): void
+    {
+        [$preventista, $assigned] = $this->routeContext();
+        $unassigned = Customer::factory()->create();
+        Sanctum::actingAs($preventista, $preventista->apiAbilities());
+
+        $this->getJson('/api/v1/customers')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $assigned->id);
+        $this->getJson("/api/v1/customers/{$unassigned->id}")->assertForbidden();
+        $this->postJson('/api/v1/customers', [])->assertUnprocessable();
+        $this->deleteJson("/api/v1/customers/{$assigned->id}")->assertForbidden();
     }
 
     public function test_catalog_changes_are_downloaded_incrementally_including_prices_and_deletions(): void

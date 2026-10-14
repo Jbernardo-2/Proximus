@@ -47,7 +47,7 @@ class OperationalUserJourneyTest extends TestCase
             'quantity_reserved' => '0.000000',
         ]);
 
-        $this->actingAs($salesperson)->post(route('customers.store'), [
+        $this->actingAs($supervisor)->post(route('customers.store'), [
             'code' => 'CLI-FLUJO-001',
             'business_name' => 'Pulpería Flujo Completo',
             'address' => 'Barrio El Centro, local 10',

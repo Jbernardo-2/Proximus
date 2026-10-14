@@ -2,14 +2,21 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Customer;
+use App\Weekday;
 use Illuminate\Validation\Rule;
 
 class StoreCustomerRequest extends OperationsRequest
 {
+    public function authorize(): bool
+    {
+        return $this->user()?->can('create', Customer::class) ?? false;
+    }
+
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'code' => $this->string('code')->trim()->upper()->toString(),
+            'code' => $this->nullableString('code') === null ? null : $this->string('code')->trim()->upper()->toString(),
             'business_name' => $this->string('business_name')->trim()->toString(),
             'business_type' => $this->nullableString('business_type'),
             'contact_name' => $this->nullableString('contact_name'),
@@ -27,7 +34,14 @@ class StoreCustomerRequest extends OperationsRequest
         $customer = $this->route('customer');
 
         return [
-            'code' => ['required', 'string', 'max:40', Rule::unique('customers', 'code')->ignore($customer)],
+            // A new customer may come without code (the server numbers it) and with the id the phone generated offline.
+            'id' => $customer === null ? ['sometimes', 'ulid', Rule::unique('customers', 'id')] : ['prohibited'],
+            'code' => [$customer === null ? 'nullable' : 'required', 'string', 'max:40', Rule::unique('customers', 'code')->ignore($customer)],
+            'route_stop' => $customer === null ? ['sometimes', 'nullable', 'array'] : ['prohibited'],
+            'route_stop.id' => ['sometimes', 'ulid', Rule::unique('route_stops', 'id')],
+            'route_stop.sales_route_id' => ['sometimes', 'ulid', Rule::exists('sales_routes', 'id')->whereNull('deleted_at')],
+            'route_stop.visit_day' => ['sometimes', 'integer', Rule::enum(Weekday::class)],
+            'route_stop.visit_order' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:65535'],
             'business_name' => ['required', 'string', 'max:255'],
             'business_type' => ['nullable', 'string', 'max:80'],
             'contact_name' => ['nullable', 'string', 'max:255'],

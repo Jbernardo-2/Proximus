@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Services\VisitLocation;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 
 class CustomerVisitController extends Controller
 {
@@ -21,6 +22,7 @@ class CustomerVisitController extends Controller
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
+        Gate::authorize('view', $customer);
         $visit = $recordVisit->handle(
             actor: $user,
             customer: $customer,

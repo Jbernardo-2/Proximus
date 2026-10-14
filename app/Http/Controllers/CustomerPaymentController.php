@@ -9,6 +9,7 @@ use App\Http\Requests\StoreCustomerPaymentRequest;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Gate;
 
 class CustomerPaymentController extends Controller
 {
@@ -20,6 +21,7 @@ class CustomerPaymentController extends Controller
     ): RedirectResponse {
         /** @var User $user */
         $user = $request->user();
+        Gate::authorize('view', $customer);
         $payment = $recordPayment->handle($customer, $request->validated(), $user);
         $recordVisit->forRequest($request, CustomerVisitType::AccountPayment, $customer, $payment);
 

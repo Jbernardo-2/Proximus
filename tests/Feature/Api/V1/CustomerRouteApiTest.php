@@ -17,7 +17,7 @@ class CustomerRouteApiTest extends TestCase
 
     public function test_valid_payload_creates_customer_and_returns_201(): void
     {
-        Sanctum::actingAs(User::factory()->preventista()->create(), ['customers:manage']);
+        Sanctum::actingAs(User::factory()->supervisor()->create(), ['customers:manage']);
 
         $response = $this->postJson('/api/v1/customers', [
             'code' => 'cli-api-01',

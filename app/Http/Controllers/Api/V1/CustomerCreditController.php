@@ -9,11 +9,13 @@ use App\Models\Customer;
 use App\Models\CustomerReceivable;
 use App\Services\CustomerCreditService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 
 class CustomerCreditController extends Controller
 {
     public function __invoke(Customer $customer, CustomerCreditService $creditService): JsonResponse
     {
+        Gate::authorize('view', $customer);
         $customer->load('creditProfile');
 
         return response()->json([

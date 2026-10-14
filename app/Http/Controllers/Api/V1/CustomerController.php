@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\CreateCustomerAction;
 use App\CustomerReceivableStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCustomerRequest;
@@ -12,6 +13,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 
 class CustomerController extends Controller
 {
@@ -22,7 +24,9 @@ class CustomerController extends Controller
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->toString();
         $businessType = $request->string('business_type')->trim()->toString();
+        Gate::authorize('viewAny', Customer::class);
         $customers = Customer::query()
+            ->visibleTo($user)
             ->with('creditProfile')
             ->withCount(['routeStops' => fn ($query) => $query->visibleTo($user)])
             ->withSum([
@@ -50,9 +54,11 @@ class CustomerController extends Controller
         return CustomerResource::collection($customers);
     }
 
-    public function store(StoreCustomerRequest $request): JsonResponse
+    public function store(StoreCustomerRequest $request, CreateCustomerAction $createCustomer): JsonResponse
     {
-        $customer = Customer::query()->create($request->validated());
+        /** @var User $user */
+        $user = $request->user();
+        $customer = $createCustomer->handle($request->validated(), $user);
 
         return (new CustomerResource($customer->loadCount('routeStops')))
             ->response()
@@ -63,6 +69,7 @@ class CustomerController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+        Gate::authorize('view', $customer);
 
         return new CustomerResource($customer->load([
             'creditProfile',
@@ -84,8 +91,10 @@ class CustomerController extends Controller
         ]));
     }
 
-    public function destroy(Customer $customer): JsonResponse
+    public function destroy(Request $request, Customer $customer): JsonResponse
     {
+        Gate::authorize('delete', $customer);
+
         if ($customer->routeStops()->exists()) {
             return response()->json([
                 'message' => 'No se puede eliminar un cliente asignado a rutas.',

@@ -82,9 +82,11 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
     "customers":       { "mode": "full",  "available": false },
     "customer_credit": { "mode": "full",  "available": false },
     "receivables":     { "mode": "full",  "available": false },
+    "route_activity":  { "mode": "full",  "available": false },
     "delivery_runs":   { "mode": "full",  "available": true }
   },
-  "operations": ["order.create", "visit.no_sale", "delivery.outcome", "delivery.payment", "customer.payment"],
+  "default_warehouse": { "id": "01J…", "code": "BOD-01", "name": "Bodega principal" },
+  "operations": ["delivery.outcome", "delivery.payment"],
   "catalogs": {
     "payment_terms":            [{ "value": "cash", "label": "Contado" }],
     "payment_methods":          [{ "value": "bank_transfer", "label": "Transferencia", "requires_reference": false }],
@@ -110,6 +112,7 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
 | products, stocks | ✓ | ✓ | ✓ | ✓ |
 | routes, customers, customer_credit | ✓ (todos) | ✓ (solo sus rutas) | — | — |
 | receivables | ✓ (todos) | ✓ (solo sus rutas) | — | — |
+| route_activity | — | ✓ (sus paradas de hoy) | — | — |
 | delivery_runs | ✓ (todas las abiertas) | — | ✓ (solo las suyas) | según permisos |
 
 ---
@@ -141,7 +144,7 @@ El cursor es opaco: guárdalo tal cual, no lo interpretes.
 
 Para forzar una descarga completa (reinstalación o datos dañados), borra el cursor guardado.
 
-### Modo `full` (routes, customers, customer_credit, receivables, delivery_runs)
+### Modo `full` (routes, customers, customer_credit, receivables, route_activity, delivery_runs)
 
 1. Se pide sin cursor y se recorren todas las páginas igual que en `delta`.
 2. Solo **al terminar todas las páginas**, se reemplaza la tabla local completa por lo recibido. Si la descarga se corta a la mitad, se conserva la tabla anterior.
@@ -178,6 +181,10 @@ Precio sugerido sin conexión (la misma regla que el servidor):
 **customers**: `id`, `code`, `business_name`, `business_type`, `contact_name`, `phone`, `whatsapp`, `address`, `reference`, `latitude`, `longitude`.
 
 **customer_credit**: `customer_id`, `status`, `allows_credit`, `credit_limit`, `term_days`, `grace_days`, `outstanding`, `overdue`, `committed`, `available_credit`. Sin conexión, la app resta de `available_credit` el crédito que ya otorgó localmente desde la última descarga.
+
+**route_activity**: las paradas de hoy del preventista con lo que ya se hizo en cada una. Contiene `id` (= `route_stop_id`), `date` (día para el que se preparó), `visit_order`, `route`, `customer`, `status` (`pending`, `order_taken`, `no_sale` o `visited`), las marcas `has_order`, `has_no_sale` y `has_payment`, `orders_count`, `orders_total`, `payments_count`, `payments_total`, y el último `order` y la última `visit`. Pedido y abono son independientes: un cliente puede tener los dos el mismo día. Si `date` no es hoy, la app avisa que la ruta es de otro día.
+
+`default_warehouse` del manifiesto es la bodega cuyas existencias se muestran al tomar pedidos. `operations` lista solo las operaciones que el usuario puede enviar.
 
 **receivables**: deudas abiertas de los clientes visibles, para aplicar abonos sin conexión. Contiene `id`, `customer_id`, `source`, `document_number`, `order_id`, `original_amount`, `outstanding_amount`, `currency`, `status`, `status_label`, `issued_at`, `due_date`, `is_overdue` y `notes`. Solo está disponible para quien puede registrar abonos. Sin conexión, la app resta de `outstanding_amount` lo que ya abonó localmente.
 
@@ -263,6 +270,25 @@ Opcional en todas las operaciones. Se captura automáticamente al guardar, sin p
 - Usa la última posición conocida si tiene menos de 2 minutos. No bloquees el guardado esperando GPS.
 
 ### Operaciones
+
+#### `customer.create`: cliente nuevo registrado en ruta
+
+```json
+{
+  "id": "01JA…",
+  "business_name": "Pulpería Nueva",
+  "address": "Colonia Kennedy, bloque 3",
+  "contact_name": null, "phone": null, "whatsapp": null, "reference": null,
+  "latitude": "14.0723000", "longitude": "-87.1921000",
+  "is_active": true,
+  "route_stop": { "id": "01JA…", "sales_route_id": "01J…", "visit_day": 3 }
+}
+```
+
+- El teléfono genera `id` y `route_stop.id` (ULID). Así, un `order.create` que va después en la cola puede usar ese `customer_id` y ese `route_stop_id` antes de sincronizar.
+- `code` es opcional: el servidor asigna `CLI-n`.
+- Al preventista se le agrega siempre a una de sus rutas: si tiene una sola, `sales_route_id` puede omitirse. `visit_day` va de 1 (lunes) a 7 (domingo); si falta, se usa el día de hoy.
+- Reenviar con el mismo `id` no lo duplica: responde `accepted` con el cliente existente.
 
 #### `order.create`: pedido del preventista
 

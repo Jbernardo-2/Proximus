@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Services\VisitLocation;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Gate;
 
 class CustomerVisitController extends Controller
 {
@@ -20,6 +21,7 @@ class CustomerVisitController extends Controller
     ): RedirectResponse {
         /** @var User $user */
         $user = $request->user();
+        Gate::authorize('view', $customer);
         $recordVisit->handle(
             actor: $user,
             customer: $customer,

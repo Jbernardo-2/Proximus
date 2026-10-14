@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\CreateCustomerAction;
 use App\CustomerCreditStatus;
 use App\CustomerReceivableStatus;
 use App\Http\Requests\StoreCustomerRequest;
@@ -12,6 +13,7 @@ use App\PaymentMethod;
 use App\Services\CustomerCreditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 class CustomerController extends Controller
@@ -23,9 +25,11 @@ class CustomerController extends Controller
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->toString();
         $businessType = $request->string('business_type')->trim()->toString();
+        Gate::authorize('viewAny', Customer::class);
 
         return view('operations.customers.index', [
             'customers' => Customer::query()
+                ->visibleTo($user)
                 ->with('creditProfile')
                 ->withCount(['routeStops' => fn ($query) => $query->visibleTo($user)])
                 ->withSum([
@@ -52,6 +56,7 @@ class CustomerController extends Controller
                 ->paginate(20)
                 ->withQueryString(),
             'businessTypes' => Customer::query()
+                ->visibleTo($user)
                 ->whereNotNull('business_type')
                 ->where('business_type', '<>', '')
                 ->distinct()
@@ -63,14 +68,18 @@ class CustomerController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
+        Gate::authorize('create', Customer::class);
+
         return view('operations.customers.form', ['customer' => new Customer]);
     }
 
-    public function store(StoreCustomerRequest $request): RedirectResponse
+    public function store(StoreCustomerRequest $request, CreateCustomerAction $createCustomer): RedirectResponse
     {
-        Customer::query()->create($request->validated());
+        /** @var User $user */
+        $user = $request->user();
+        $createCustomer->handle($request->validated(), $user);
 
         return redirect()->route('customers.index')->with('success', 'Cliente creado correctamente.');
     }
@@ -82,6 +91,7 @@ class CustomerController extends Controller
     ): View {
         /** @var User $user */
         $user = $request->user();
+        Gate::authorize('view', $customer);
         $customer->load([
             'routeStops' => fn ($query) => $query
                 ->with('salesRoute')
@@ -129,8 +139,10 @@ class CustomerController extends Controller
         ]);
     }
 
-    public function edit(Customer $customer): View
+    public function edit(Request $request, Customer $customer): View
     {
+        Gate::authorize('update', $customer);
+
         return view('operations.customers.form', compact('customer'));
     }
 
@@ -141,8 +153,10 @@ class CustomerController extends Controller
         return redirect()->route('customers.show', $customer)->with('success', 'Cliente actualizado correctamente.');
     }
 
-    public function destroy(Customer $customer): RedirectResponse
+    public function destroy(Request $request, Customer $customer): RedirectResponse
     {
+        Gate::authorize('delete', $customer);
+
         if ($customer->routeStops()->exists()
             || $customer->orders()->exists()
             || $customer->receivables()->exists()

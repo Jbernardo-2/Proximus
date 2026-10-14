@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\CompanyProfile;
+use App\Models\Customer;
 use App\Models\CustomerAccountEntry;
 use App\Models\DeliveryRun;
 use App\Models\InventoryCount;
@@ -14,6 +15,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Warehouse;
 use App\Policies\CustomerAccountEntryPolicy;
+use App\Policies\CustomerPolicy;
 use App\Policies\DeliveryRunPolicy;
 use App\Policies\InventoryCountPolicy;
 use App\Policies\InventoryDocumentPolicy;
@@ -77,6 +79,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manage-users', fn (User $user): bool => $user->canManageUsers());
         Gate::define('manage-company-profile', fn (User $user): bool => $user->canManageCompanyProfile());
         Gate::policy(SalesRoute::class, SalesRoutePolicy::class);
+        Gate::policy(Customer::class, CustomerPolicy::class);
         Gate::policy(CustomerAccountEntry::class, CustomerAccountEntryPolicy::class);
         Gate::policy(Order::class, OrderPolicy::class);
         Gate::policy(Warehouse::class, WarehousePolicy::class);

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\UserRole;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -64,6 +65,24 @@ class Customer extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        return $query->when(
+            $user->role === UserRole::Preventista,
+            fn (Builder $customers): Builder => $customers->whereHas(
+                'routeStops',
+                fn (Builder $stops): Builder => $stops
+                    ->where('is_active', true)
+                    ->whereHas(
+                        'salesRoute',
+                        fn (Builder $routes): Builder => $routes
+                            ->where('salesperson_id', $user->id)
+                            ->where('is_active', true),
+                    ),
+            ),
+        );
     }
 
     protected function casts(): array

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CompanyProfile;
 use App\Models\Device;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\PaymentMethod;
 use App\PaymentTerm;
 use App\Services\SyncPullService;
@@ -25,6 +26,7 @@ class SyncController extends Controller
         $user = $request->user();
         $company = CompanyProfile::query()->find(CompanyProfile::SINGLETON_ID);
         $device = Device::current($user);
+        $warehouse = Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->first();
 
         return response()->json([
             'server_time' => now()->toIso8601String(),
@@ -36,8 +38,9 @@ class SyncController extends Controller
                 ...$company->only(['commercial_name', 'legal_name', 'rtn', 'phone', 'whatsapp', 'email', 'address', 'slogan']),
                 'logo_url' => $company->logo_path ? asset('storage/'.$company->logo_path) : null,
             ],
+            'default_warehouse' => $warehouse?->only(['id', 'code', 'name']),
             'resources' => $pull->manifest($user),
-            'operations' => array_keys(SyncPushService::OPERATIONS),
+            'operations' => SyncPushService::availableOperations($user),
             'catalogs' => [
                 'payment_terms' => $this->labels(PaymentTerm::cases()),
                 'payment_methods' => collect(PaymentMethod::cases())->map(fn (PaymentMethod $method): array => [
@@ -78,10 +81,12 @@ class SyncController extends Controller
 
     public function push(Request $request, SyncPushService $push): JsonResponse
     {
+        /** @var User $user */
+        $user = $request->user();
         $validated = $request->validate([
             'operations' => ['required', 'array', 'min:1', 'max:100'],
             'operations.*.client_reference' => ['required', 'string', 'max:100', 'distinct'],
-            'operations.*.type' => ['required', 'string', Rule::in(array_keys(SyncPushService::OPERATIONS))],
+            'operations.*.type' => ['required', 'string', Rule::in(SyncPushService::availableOperations($user))],
             'operations.*.payload' => ['required', 'array'],
         ]);
 

@@ -42,6 +42,8 @@ class SyncPullService
     /** Rows written in the last seconds are left for the next pull so none is skipped while still committing. */
     private const int SETTLE_SECONDS = 2;
 
+    public function __construct(private RouteActivityService $routeActivity) {}
+
     /** @return array<string, array{mode: string, available: bool}> */
     public function manifest(User $user): array
     {
@@ -173,6 +175,12 @@ class SyncPullService
                     ])->all(),
                 ])->all(),
             ],
+            'route_activity' => [
+                'mode' => 'full',
+                'allowed' => fn (User $user): bool => $user->role === UserRole::Preventista && $takesOrders($user),
+                'query' => fn (User $user): Builder => $this->routeActivity->query($user),
+                'map' => fn (Collection $stops, User $user): array => $this->routeActivity->map($stops, $user),
+            ],
             'customers' => [
                 'mode' => 'full',
                 'allowed' => $takesOrders,
@@ -232,13 +240,7 @@ class SyncPullService
     {
         return Customer::query()
             ->active()
-            ->when($user->role === UserRole::Preventista, fn (Builder $query) => $query->whereHas(
-                'routeStops',
-                fn (Builder $stops) => $stops->where('is_active', true)->whereHas(
-                    'salesRoute',
-                    fn (Builder $routes) => $routes->active()->where('salesperson_id', $user->id),
-                ),
-            ));
+            ->visibleTo($user);
     }
 
     /**

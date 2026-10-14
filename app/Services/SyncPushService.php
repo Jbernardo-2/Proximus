@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Models\Device;
 use App\Models\Order;
 use App\Models\SyncOperation;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,6 +22,7 @@ class SyncPushService
 {
     /** Operation type => [HTTP method, path template]; {placeholders} are read from the payload. */
     public const array OPERATIONS = [
+        'customer.create' => ['POST', '/api/v1/customers'],
         'order.create' => ['POST', '/api/v1/orders'],
         'visit.no_sale' => ['POST', '/api/v1/customers/{customer_id}/visits'],
         'delivery.outcome' => ['PUT', '/api/v1/delivery-runs/{delivery_run_id}/orders/{run_order_id}/outcome'],
@@ -28,6 +31,21 @@ class SyncPushService
     ];
 
     public function __construct(private OfflineSync $offline) {}
+
+    /** @return list<string> */
+    public static function availableOperations(User $user): array
+    {
+        return collect(self::OPERATIONS)
+            ->keys()
+            ->filter(fn (string $operation): bool => match ($operation) {
+                'customer.create' => Gate::forUser($user)->allows('create', Customer::class),
+                'order.create', 'visit.no_sale' => Gate::forUser($user)->allows('manage-orders'),
+                'delivery.outcome', 'delivery.payment' => Gate::forUser($user)->allows('execute-deliveries'),
+                'customer.payment' => Gate::forUser($user)->allows('record-customer-payments'),
+            })
+            ->values()
+            ->all();
+    }
 
     /**
      * @param  list<array{client_reference: string, type: string, payload: array<string, mixed>}>  $operations
@@ -69,6 +87,8 @@ class SyncPushService
 
         if ($path === null) {
             [$status, $body] = [Response::HTTP_UNPROCESSABLE_ENTITY, ['message' => 'Faltan los identificadores que requiere la operación.']];
+        } elseif ($operation['type'] === 'customer.create' && is_string($payload['id'] ?? null) && ($customer = Customer::withTrashed()->find($payload['id'])) !== null) {
+            [$status, $body] = [Response::HTTP_OK, ['data' => ['id' => $customer->id, 'code' => $customer->code, 'business_name' => $customer->business_name]]];
         } elseif ($operation['type'] === 'order.create' && ($existing = $this->existingOrder($user, $payload)) !== null) {
             [$status, $body] = [Response::HTTP_OK, ['data' => ['id' => $existing->id, 'order_number' => $existing->order_number, 'status' => $existing->status->value, 'client_reference' => $existing->client_reference]]];
         } else {

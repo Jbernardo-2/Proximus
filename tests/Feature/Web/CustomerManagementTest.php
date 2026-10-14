@@ -24,6 +24,7 @@ class CustomerManagementTest extends TestCase
     public function test_preventista_can_create_customer_and_render_details(): void
     {
         $user = User::factory()->preventista()->create();
+        $route = SalesRoute::factory()->create(['salesperson_id' => $user->id, 'is_active' => true]);
 
         $response = $this->actingAs($user)->post(route('customers.store'), [
             'code' => 'cli-001',
@@ -46,6 +47,7 @@ class CustomerManagementTest extends TestCase
             ->assertRedirect(route('customers.index'))
             ->assertSessionHas('success', 'Cliente creado correctamente.');
         $this->assertSame('CLI-001', $customer->code);
+        $this->assertDatabaseHas('route_stops', ['customer_id' => $customer->id, 'sales_route_id' => $route->id, 'visit_day' => now()->dayOfWeekIso, 'is_active' => true]);
         $this->assertSame('14.0723000', $customer->latitude);
         $this->assertDatabaseHas('customers', [
             'id' => $customer->id,
@@ -171,8 +173,8 @@ class CustomerManagementTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('customers.store'), ['is_active' => '1'])
+            ->assertSessionDoesntHaveErrors('code')
             ->assertSessionHasErrors([
-                'code' => 'El campo código es obligatorio.',
                 'business_name' => 'El campo nombre del negocio es obligatorio.',
                 'address' => 'El campo dirección es obligatorio.',
             ]);
@@ -189,7 +191,7 @@ class CustomerManagementTest extends TestCase
 
     public function test_customer_index_escapes_dangerous_content(): void
     {
-        $user = User::factory()->preventista()->create();
+        $user = User::factory()->supervisor()->create();
         Customer::factory()->create([
             'business_name' => "Pulpería <script>alert('xss')</script>",
             'address' => "Calle <script>alert('address')</script>",
@@ -205,7 +207,7 @@ class CustomerManagementTest extends TestCase
 
     public function test_customer_assigned_to_a_route_cannot_be_deleted(): void
     {
-        $user = User::factory()->preventista()->create();
+        $user = User::factory()->supervisor()->create();
         $customer = Customer::factory()->create();
         RouteStop::factory()->for($customer)->for(SalesRoute::factory())->create();
 
