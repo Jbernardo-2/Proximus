@@ -32,7 +32,10 @@ class SyncController extends Controller
             'currency' => mb_strtoupper((string) config('proximus.currency', 'HNL')),
             'user' => ['id' => $user->id, 'name' => $user->name, 'role' => $user->role->value],
             'device' => $device === null ? null : ['id' => $device->id, 'code' => $device->code, 'series' => $device->series()],
-            'company' => $company?->only(['commercial_name', 'legal_name', 'rtn', 'phone', 'whatsapp', 'email', 'address', 'slogan']),
+            'company' => $company === null ? null : [
+                ...$company->only(['commercial_name', 'legal_name', 'rtn', 'phone', 'whatsapp', 'email', 'address', 'slogan']),
+                'logo_url' => $company->logo_path ? asset('storage/'.$company->logo_path) : null,
+            ],
             'resources' => $pull->manifest($user),
             'operations' => array_keys(SyncPushService::OPERATIONS),
             'catalogs' => [
