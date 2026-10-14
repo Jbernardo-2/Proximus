@@ -104,6 +104,9 @@
                         <a href="{{ route('users.index') }}" class="nav-link {{ request()->routeIs('users.*') ? 'nav-link-active' : '' }}">
                             <span class="text-base">♙</span> Usuarios
                         </a>
+                        <a href="{{ route('devices.index') }}" class="nav-link {{ request()->routeIs('devices.*') ? 'nav-link-active' : '' }}">
+                            <span class="text-base">▯</span> Teléfonos
+                        </a>
                     @endcan
                     @can('manage-company-profile')
                         <a href="{{ route('company.edit') }}" class="nav-link {{ request()->routeIs('company.*') ? 'nav-link-active' : '' }}">
@@ -187,6 +190,7 @@
                         @endcan
                         @can('manage-users')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('users.index') }}">Usuarios</a>
+                            <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('devices.index') }}">Teléfonos</a>
                         @endcan
                         @can('manage-company-profile')
                             <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="{{ route('company.edit') }}">Empresa</a>

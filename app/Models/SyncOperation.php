@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'device_name', 'client_reference', 'type', 'status', 'http_status', 'payload', 'response', 'occurred_at', 'attempts', 'processed_at'])]
+#[Fillable(['user_id', 'device_id', 'device_name', 'client_reference', 'type', 'status', 'http_status', 'payload', 'response', 'occurred_at', 'attempts', 'processed_at'])]
 class SyncOperation extends Model
 {
     use HasUlids;
@@ -21,6 +21,11 @@ class SyncOperation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function device(): BelongsTo
+    {
+        return $this->belongsTo(Device::class);
     }
 
     protected function casts(): array

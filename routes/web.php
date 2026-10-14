@@ -27,6 +27,7 @@ use App\Http\Controllers\DeliveryRunController;
 use App\Http\Controllers\DeliveryRunOrderController;
 use App\Http\Controllers\DeliveryRunOrderPreparationController;
 use App\Http\Controllers\DepartDeliveryRunController;
+use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\InventoryDocumentController;
@@ -360,6 +361,9 @@ Route::middleware(['auth', 'can:configure-inventory'])->group(function (): void 
 
 Route::middleware(['auth', 'can:manage-users'])->group(function (): void {
     Route::resource('users', UserController::class)->except(['show', 'destroy']);
+    Route::get('/devices', [DeviceController::class, 'index'])->name('devices.index');
+    Route::post('/devices/{device}/revoke', [DeviceController::class, 'revoke'])->name('devices.revoke');
+    Route::post('/devices/{device}/restore', [DeviceController::class, 'restore'])->name('devices.restore');
 });
 
 Route::middleware(['auth', 'can:manage-company-profile'])->prefix('company')->name('company.')->group(function (): void {

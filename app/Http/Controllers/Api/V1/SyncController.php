@@ -6,6 +6,7 @@ use App\CustomerVisitReason;
 use App\DeliveryOutcomeReason;
 use App\Http\Controllers\Controller;
 use App\Models\CompanyProfile;
+use App\Models\Device;
 use App\Models\User;
 use App\PaymentMethod;
 use App\PaymentTerm;
@@ -23,12 +24,14 @@ class SyncController extends Controller
         /** @var User $user */
         $user = $request->user();
         $company = CompanyProfile::query()->find(CompanyProfile::SINGLETON_ID);
+        $device = Device::current($user);
 
         return response()->json([
             'server_time' => now()->toIso8601String(),
             'timezone' => config('app.timezone'),
             'currency' => mb_strtoupper((string) config('proximus.currency', 'HNL')),
             'user' => ['id' => $user->id, 'name' => $user->name, 'role' => $user->role->value],
+            'device' => $device === null ? null : ['id' => $device->id, 'code' => $device->code, 'series' => $device->series()],
             'company' => $company?->only(['commercial_name', 'legal_name', 'rtn', 'phone', 'whatsapp', 'email', 'address', 'slogan']),
             'resources' => $pull->manifest($user),
             'operations' => array_keys(SyncPushService::OPERATIONS),

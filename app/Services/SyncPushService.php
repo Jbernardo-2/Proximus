@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Device;
 use App\Models\Order;
 use App\Models\SyncOperation;
 use App\Models\User;
@@ -37,16 +38,17 @@ class SyncPushService
         /** @var User $user */
         $user = $request->user();
         $token = $user->currentAccessToken();
-        $deviceName = $token instanceof PersonalAccessToken ? $token->name : null;
+        $device = Device::current($user);
+        $deviceName = $device !== null ? "{$device->code} · {$device->name}" : ($token instanceof PersonalAccessToken ? $token->name : null);
 
-        return array_map(fn (array $operation): array => $this->apply($request, $user, $deviceName, $operation), $operations);
+        return array_map(fn (array $operation): array => $this->apply($request, $user, $device, $deviceName, $operation), $operations);
     }
 
     /**
      * @param  array{client_reference: string, type: string, payload: array<string, mixed>}  $operation
      * @return array<string, mixed>
      */
-    private function apply(Request $request, User $user, ?string $deviceName, array $operation): array
+    private function apply(Request $request, User $user, ?Device $device, ?string $deviceName, array $operation): array
     {
         $previous = SyncOperation::query()
             ->where('user_id', $user->id)
@@ -72,12 +74,14 @@ class SyncPushService
         } else {
             [$status, $body] = $this->offline->during(
                 fn (): array => $this->dispatch($request, self::OPERATIONS[$operation['type']][0], $path, $payload),
+                $device,
             );
         }
 
         $record = SyncOperation::query()->updateOrCreate(
             ['user_id' => $user->id, 'client_reference' => $operation['client_reference']],
             [
+                'device_id' => $device?->id,
                 'device_name' => $deviceName,
                 'type' => $operation['type'],
                 'status' => match (true) {

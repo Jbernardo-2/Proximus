@@ -35,7 +35,7 @@ class RecordDeliverySettlementAction
     ) {}
 
     /**
-     * @param  array{allocations: list<array{method: string, amount: mixed, reference?: ?string}>, credit_reason?: ?string, credit_override_reason?: ?string}  $data
+     * @param  array{allocations: list<array{method: string, amount: mixed, reference?: ?string, receipt_number?: ?string}>, invoice_number?: ?string, credit_reason?: ?string, credit_override_reason?: ?string}  $data
      */
     public function handle(
         DeliveryRun $deliveryRun,
@@ -83,7 +83,7 @@ class RecordDeliverySettlementAction
             $settledAt = now();
             $order = Order::query()->lockForUpdate()->findOrFail($lockedRunOrder->order_id);
             $settlement = $lockedRunOrder->settlement()->create([
-                'invoice_number' => $this->generateNumber->handle('invoice', 'FAC', $settledAt),
+                'invoice_number' => $this->generateNumber->handle('invoice', 'FAC', $settledAt, $data['invoice_number'] ?? null),
                 'total_amount' => $allocationTotal,
                 'currency' => $order->currency,
                 'settled_at' => $settledAt,
@@ -169,7 +169,7 @@ class RecordDeliverySettlementAction
                 }
 
                 $payment = $lockedRunOrder->payments()->create([
-                    'receipt_number' => $this->generateNumber->handle('receipt', 'REC', $settledAt),
+                    'receipt_number' => $this->generateNumber->handle('receipt', 'REC', $settledAt, $allocation['receipt_number'] ?? null),
                     'status' => DeliveryPaymentStatus::Active,
                     'method' => $paymentMethod,
                     'amount' => $amount,
