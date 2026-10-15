@@ -69,6 +69,28 @@ class DeviceTest extends TestCase
         $this->login($driver, 'telefono-perdido')->assertCreated()->assertJsonPath('device.code', 'M001');
     }
 
+    public function test_a_token_in_use_is_renewed_for_the_same_phone_with_current_abilities(): void
+    {
+        $user = User::factory()->preventista()->create();
+        $first = $this->login($user, 'telefono-renovacion');
+        $device = Device::query()->sole();
+        $this->travel(10)->days();
+
+        $renewed = $this->postJson('/api/v1/tokens/refresh', [], $this->bearer($first->json('token')))
+            ->assertOk()
+            ->assertJsonPath('device.code', $device->code)
+            ->assertJsonPath('abilities', $user->apiAbilities());
+
+        $this->assertTrue(now()->addDays(29)->lessThan($renewed->json('expires_at')), 'the expiry starts again');
+        $this->assertSame(1, PersonalAccessToken::query()->count());
+        $this->assertSame(PersonalAccessToken::query()->value('id'), $device->refresh()->personal_access_token_id);
+        $this->getJson('/api/v1/sync', $this->bearer($first->json('token')))->assertUnauthorized();
+        $this->getJson('/api/v1/sync', $this->bearer($renewed->json('token')))->assertOk();
+
+        $user->forceFill(['is_active' => false])->save();
+        $this->postJson('/api/v1/tokens/refresh', [], $this->bearer($renewed->json('token')))->assertForbidden();
+    }
+
     public function test_only_administrators_manage_phones(): void
     {
         $device = Device::factory()->create();

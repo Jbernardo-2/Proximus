@@ -72,6 +72,7 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::delete('/tokens/current', [AuthTokenController::class, 'destroy'])->name('tokens.destroy');
+        Route::post('/tokens/refresh', [AuthTokenController::class, 'refresh'])->name('tokens.refresh');
 
         Route::prefix('sync')->name('sync.')->group(function (): void {
             Route::get('/', [SyncController::class, 'manifest'])->name('manifest');

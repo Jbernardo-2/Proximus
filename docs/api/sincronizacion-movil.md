@@ -55,6 +55,8 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
 - **422**: credenciales inválidas o usuario inactivo.
 - **423** con `"code": "device_revoked"`: el administrador bloqueó este teléfono. Ver la sección 6.
 
+`POST /api/v1/tokens/refresh` cambia el token actual por uno nuevo (misma respuesta que el login, con vencimiento desde cero y los permisos vigentes del usuario). La app lo llama con señal cuando el token tiene más de 7 días; así una sesión en uso no vence. Si el usuario fue desactivado responde 403.
+
 `DELETE /api/v1/tokens/current` cierra la sesión. Antes de cerrarla, la app debe vaciar la cola de envío (sección 4). Si no puede, debe avisar al usuario de que perderá lo pendiente.
 
 ---

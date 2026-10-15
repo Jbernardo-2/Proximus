@@ -12,6 +12,7 @@ use App\Models\User;
 use App\SecurityEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -91,6 +92,51 @@ class AuthTokenController extends Controller
             'user' => new UserResource($user),
             'device' => $device === null ? null : ['id' => $device->id, 'code' => $device->code, 'series' => $device->series()],
         ], 201);
+    }
+
+    /**
+     * Swaps the current token for a new one with a fresh expiry and the user's current
+     * abilities, so a phone in daily use never reaches the expiry while offline.
+     */
+    public function refresh(Request $request, RecordSecurityEventAction $recordSecurityEvent): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $current = $user->currentAccessToken();
+
+        if (! $user->is_active || ! $current instanceof PersonalAccessToken) {
+            return response()->json(['message' => 'La sesión no se puede renovar.'], 403);
+        }
+
+        $expirationMinutes = (int) config('sanctum.expiration');
+        $expiresAt = $expirationMinutes > 0 ? now()->addMinutes($expirationMinutes) : null;
+        $abilities = $user->apiAbilities();
+
+        [$newAccessToken, $device] = DB::transaction(function () use ($user, $current, $abilities, $expiresAt): array {
+            $newAccessToken = $user->createToken($current->name, $abilities, $expiresAt);
+            $device = Device::query()->where('personal_access_token_id', $current->getKey())->first();
+            $device?->forceFill(['personal_access_token_id' => $newAccessToken->accessToken->getKey(), 'last_seen_at' => now()])->save();
+            $current->delete();
+
+            return [$newAccessToken, $device];
+        });
+
+        $recordSecurityEvent->handle(
+            SecurityEvent::TokenIssued,
+            $request,
+            actor: $user,
+            subject: $user,
+            metadata: array_filter(['channel' => 'api', 'reason' => 'refresh', 'device_code' => $device?->code]),
+        );
+
+        return response()->json([
+            'token' => $newAccessToken->plainTextToken,
+            'token_type' => 'Bearer',
+            'abilities' => $abilities,
+            'expires_at' => $newAccessToken->accessToken->expires_at?->toIso8601String(),
+            'user' => new UserResource($user),
+            'device' => $device === null ? null : ['id' => $device->id, 'code' => $device->code, 'series' => $device->series()],
+        ]);
     }
 
     public function destroy(Request $request, RecordSecurityEventAction $recordSecurityEvent): JsonResponse
