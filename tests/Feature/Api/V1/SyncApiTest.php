@@ -181,6 +181,24 @@ class SyncApiTest extends TestCase
             ->assertJsonPath('records.0.payments_total', '40.0000');
     }
 
+    public function test_recent_orders_of_the_preventistas_customers_are_kept_for_the_customer_profile(): void
+    {
+        [$preventista, $customer] = $this->routeContext();
+        $recent = Order::factory()->for($customer)->create(['status' => OrderStatus::Confirmed, 'order_date' => today()->subDays(3), 'total' => '80.0000']);
+        Order::factory()->for($customer)->create(['status' => OrderStatus::Draft, 'order_date' => today()]);
+        Order::factory()->for($customer)->create(['status' => OrderStatus::Delivered, 'order_date' => today()->subDays(45)]);
+        Order::factory()->create(['status' => OrderStatus::Confirmed, 'order_date' => today()]);
+        Sanctum::actingAs($preventista, $preventista->apiAbilities());
+
+        $this->getJson('/api/v1/sync/pull/recent_orders')
+            ->assertOk()
+            ->assertJsonCount(1, 'records')
+            ->assertJsonPath('records.0.id', $recent->id)
+            ->assertJsonPath('records.0.customer_id', $customer->id)
+            ->assertJsonPath('records.0.total', '80.0000')
+            ->assertJsonPath('records.0.status', OrderStatus::Confirmed->value);
+    }
+
     public function test_preventista_customer_access_is_limited_to_active_assigned_routes(): void
     {
         [$preventista, $assigned] = $this->routeContext();

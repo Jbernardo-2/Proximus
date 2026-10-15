@@ -42,6 +42,9 @@ class SyncPullService
     /** Rows written in the last seconds are left for the next pull so none is skipped while still committing. */
     private const int SETTLE_SECONDS = 2;
 
+    /** Orders the phone keeps per customer for its profile. */
+    private const int RECENT_ORDER_DAYS = 30;
+
     public function __construct(private RouteActivityService $routeActivity) {}
 
     /** @return array<string, array{mode: string, available: bool}> */
@@ -173,6 +176,30 @@ class SyncPullService
                         'visit_day' => $stop->visit_day->value,
                         'visit_order' => $stop->visit_order,
                     ])->all(),
+                ])->all(),
+            ],
+            'recent_orders' => [
+                'mode' => 'full',
+                'allowed' => $takesOrders,
+                'query' => fn (User $user): Builder => Order::query()
+                    ->whereIn('customer_id', $this->visibleCustomers($user)->select('customers.id'))
+                    ->where('status', '!=', OrderStatus::Draft->value)
+                    ->whereDate('order_date', '>=', today()->subDays(self::RECENT_ORDER_DAYS))
+                    ->withCount('items'),
+                'map' => fn (Collection $orders): array => $orders->map(fn (Order $order): array => [
+                    'id' => $order->id,
+                    'customer_id' => $order->customer_id,
+                    'route_stop_id' => $order->route_stop_id,
+                    'client_reference' => $order->client_reference,
+                    'order_number' => $order->order_number,
+                    'order_date' => $order->order_date?->toDateString(),
+                    'requested_delivery_date' => $order->requested_delivery_date?->toDateString(),
+                    'status' => $order->status->value,
+                    'status_label' => $order->status->label(),
+                    'payment_term' => $order->payment_term->value,
+                    'total' => $order->total,
+                    'items_count' => (int) $order->items_count,
+                    'salesperson_name' => $order->salesperson_name,
                 ])->all(),
             ],
             'route_activity' => [

@@ -83,6 +83,7 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
     "customer_credit": { "mode": "full",  "available": false },
     "receivables":     { "mode": "full",  "available": false },
     "route_activity":  { "mode": "full",  "available": false },
+    "recent_orders":   { "mode": "full",  "available": false },
     "delivery_runs":   { "mode": "full",  "available": true }
   },
   "default_warehouse": { "id": "01J…", "code": "BOD-01", "name": "Bodega principal" },
@@ -113,6 +114,7 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
 | routes, customers, customer_credit | ✓ (todos) | ✓ (solo sus rutas) | — | — |
 | receivables | ✓ (todos) | ✓ (solo sus rutas) | — | — |
 | route_activity | — | ✓ (sus paradas de hoy) | — | — |
+| recent_orders | ✓ (todos) | ✓ (sus clientes) | — | — |
 | delivery_runs | ✓ (todas las abiertas) | — | ✓ (solo las suyas) | según permisos |
 
 ---
@@ -144,7 +146,7 @@ El cursor es opaco: guárdalo tal cual, no lo interpretes.
 
 Para forzar una descarga completa (reinstalación o datos dañados), borra el cursor guardado.
 
-### Modo `full` (routes, customers, customer_credit, receivables, route_activity, delivery_runs)
+### Modo `full` (routes, customers, customer_credit, receivables, route_activity, recent_orders, delivery_runs)
 
 1. Se pide sin cursor y se recorren todas las páginas igual que en `delta`.
 2. Solo **al terminar todas las páginas**, se reemplaza la tabla local completa por lo recibido. Si la descarga se corta a la mitad, se conserva la tabla anterior.
@@ -183,6 +185,8 @@ Precio sugerido sin conexión (la misma regla que el servidor):
 **customer_credit**: `customer_id`, `status`, `allows_credit`, `credit_limit`, `term_days`, `grace_days`, `outstanding`, `overdue`, `committed`, `available_credit`. Sin conexión, la app resta de `available_credit` el crédito que ya otorgó localmente desde la última descarga.
 
 **route_activity**: las paradas de hoy del preventista con lo que ya se hizo en cada una. Contiene `id` (= `route_stop_id`), `date` (día para el que se preparó), `visit_order`, `route`, `customer`, `status` (`pending`, `order_taken`, `no_sale` o `visited`), las marcas `has_order`, `has_no_sale` y `has_payment`, `orders_count`, `orders_total`, `payments_count`, `payments_total`, y el último `order` y la última `visit`. Pedido y abono son independientes: un cliente puede tener los dos el mismo día. Si `date` no es hoy, la app avisa que la ruta es de otro día.
+
+**recent_orders**: pedidos de los últimos 30 días de los clientes visibles, sin borradores, para la ficha del cliente. Contiene `id`, `customer_id`, `route_stop_id`, `client_reference`, `order_number`, `order_date`, `requested_delivery_date`, `status`, `status_label`, `payment_term`, `total`, `items_count` y `salesperson_name`. La app los cruza con su cola por `client_reference` para no mostrar dos veces un pedido que hizo el teléfono.
 
 `default_warehouse` del manifiesto es la bodega cuyas existencias se muestran al tomar pedidos. `operations` lista solo las operaciones que el usuario puede enviar.
 
