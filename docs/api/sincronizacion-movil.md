@@ -162,6 +162,7 @@ Para forzar una descarga completa (reinstalación o datos dañados), borra el cu
   "id": "01J…", "deleted": false, "sku": "BEB-001", "name": "Agua 600 ml",
   "category": "Bebidas", "brand": "…", "base_unit": "und", "allows_decimal": false,
   "is_active": true, "image_url": "https://…",
+  "thumbnail_url": "https://…/api/v1/sync/product-images/01J…", "image_version": "3f9a1c0b2d4e",
   "presentations": [{
     "id": "01J…", "name": "Fardo 24", "barcode": "…", "conversion_factor": "24.000000",
     "sale_price": "180.0000", "is_base": false, "is_sellable": true, "is_active": true,
@@ -171,6 +172,8 @@ Para forzar una descarga completa (reinstalación o datos dañados), borra el cu
   "updated_at": "…"
 }
 ```
+
+**Miniaturas:** `image_url` es la foto original (puede pesar megabytes). El teléfono usa `thumbnail_url`: `GET` con el token, que devuelve un JPEG de máximo 256 px (unos 15 KB) que el servidor crea la primera vez que se pide y luego conserva. La app guarda cada miniatura en el teléfono como `<id>_<image_version>.jpg` y la vuelve a descargar solo cuando cambia `image_version`, que cambia con la foto. Sin foto, ambos campos son `null`. Responde 404 si la foto ya no existe. La descarga respeta el límite de 120 peticiones por minuto: si se alcanza, la app sigue en la siguiente sincronización.
 
 Precio sugerido sin conexión (la misma regla que el servidor):
 
@@ -188,7 +191,7 @@ Precio sugerido sin conexión (la misma regla que el servidor):
 
 **route_activity**: las paradas de hoy del preventista con lo que ya se hizo en cada una. Contiene `id` (= `route_stop_id`), `date` (día para el que se preparó), `visit_order`, `route`, `customer`, `status` (`pending`, `order_taken`, `no_sale` o `visited`), las marcas `has_order`, `has_no_sale` y `has_payment`, `orders_count`, `orders_total`, `payments_count`, `payments_total`, y el último `order` y la última `visit`. Pedido y abono son independientes: un cliente puede tener los dos el mismo día. Si `date` no es hoy, la app avisa que la ruta es de otro día.
 
-**recent_orders**: pedidos de los últimos 30 días de los clientes visibles, sin borradores, para la ficha del cliente. Contiene `id`, `customer_id`, `route_stop_id`, `client_reference`, `order_number`, `order_date`, `requested_delivery_date`, `status`, `status_label`, `payment_term`, `total`, `items_count` y `salesperson_name`. La app los cruza con su cola por `client_reference` para no mostrar dos veces un pedido que hizo el teléfono.
+**recent_orders**: pedidos de los últimos 30 días de los clientes visibles, sin borradores, para la ficha del cliente. Contiene `id`, `customer_id`, `route_stop_id`, `client_reference`, `order_number`, `order_date`, `requested_delivery_date`, `status`, `status_label`, `payment_term`, `total`, `items_count`, `salesperson_name`, `notes`, `cancellation_reason` e `items[]` (`product_id`, `product_presentation_id`, `product_sku`, `product_name`, `presentation_name`, `quantity`, `unit_price`, `line_total`, `notes`, tal como se vendieron), para ver el pedido completo sin señal. La app los cruza con su cola por `client_reference` para no mostrar dos veces un pedido que hizo el teléfono.
 
 `default_warehouse` del manifiesto es la bodega cuyas existencias se muestran al tomar pedidos. `operations` lista solo las operaciones que el usuario puede enviar.
 

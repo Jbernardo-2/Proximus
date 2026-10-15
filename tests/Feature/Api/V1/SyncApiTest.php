@@ -19,6 +19,7 @@ use App\Models\DeliveryRunOrder;
 use App\Models\InventoryStock;
 use App\Models\MeasurementUnit;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\PriceTier;
 use App\Models\Product;
 use App\Models\ProductPresentation;
@@ -185,6 +186,7 @@ class SyncApiTest extends TestCase
     {
         [$preventista, $customer] = $this->routeContext();
         $recent = Order::factory()->for($customer)->create(['status' => OrderStatus::Confirmed, 'order_date' => today()->subDays(3), 'total' => '80.0000']);
+        OrderItem::factory()->for($recent)->create(['product_name' => 'Arroz 1 lb', 'presentation_name' => 'Unidad', 'quantity' => '4.000000', 'unit_price' => '20.0000', 'line_total' => '80.0000']);
         Order::factory()->for($customer)->create(['status' => OrderStatus::Draft, 'order_date' => today()]);
         Order::factory()->for($customer)->create(['status' => OrderStatus::Delivered, 'order_date' => today()->subDays(45)]);
         Order::factory()->create(['status' => OrderStatus::Confirmed, 'order_date' => today()]);
@@ -196,7 +198,10 @@ class SyncApiTest extends TestCase
             ->assertJsonPath('records.0.id', $recent->id)
             ->assertJsonPath('records.0.customer_id', $customer->id)
             ->assertJsonPath('records.0.total', '80.0000')
-            ->assertJsonPath('records.0.status', OrderStatus::Confirmed->value);
+            ->assertJsonPath('records.0.status', OrderStatus::Confirmed->value)
+            ->assertJsonPath('records.0.items.0.product_name', 'Arroz 1 lb')
+            ->assertJsonPath('records.0.items.0.quantity', '4.000000')
+            ->assertJsonPath('records.0.items.0.line_total', '80.0000');
     }
 
     public function test_preventista_customer_access_is_limited_to_active_assigned_routes(): void

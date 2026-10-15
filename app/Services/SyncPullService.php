@@ -45,7 +45,7 @@ class SyncPullService
     /** Orders the phone keeps per customer for its profile. */
     private const int RECENT_ORDER_DAYS = 30;
 
-    public function __construct(private RouteActivityService $routeActivity) {}
+    public function __construct(private RouteActivityService $routeActivity, private ProductThumbnails $thumbnails) {}
 
     /** @return array<string, array{mode: string, available: bool}> */
     public function manifest(User $user): array
@@ -121,6 +121,9 @@ class SyncPullService
                         'allows_decimal' => $product->allows_decimal,
                         'is_active' => $product->is_active,
                         'image_url' => $product->image_path ? asset('storage/'.$product->image_path) : null,
+                        // The phone keeps the thumbnail on the device; a new version means a new photo.
+                        'thumbnail_url' => $product->image_path ? route('api.v1.sync.product-images.show', $product) : null,
+                        'image_version' => $this->thumbnails->version($product),
                         'presentations' => $product->presentations->map(fn (ProductPresentation $presentation): array => [
                             'id' => $presentation->id,
                             'name' => $presentation->name,
@@ -185,7 +188,8 @@ class SyncPullService
                     ->whereIn('customer_id', $this->visibleCustomers($user)->select('customers.id'))
                     ->where('status', '!=', OrderStatus::Draft->value)
                     ->whereDate('order_date', '>=', today()->subDays(self::RECENT_ORDER_DAYS))
-                    ->withCount('items'),
+                    ->withCount('items')
+                    ->with(['items' => fn ($items) => $items->orderBy('created_at')->orderBy('id')]),
                 'map' => fn (Collection $orders): array => $orders->map(fn (Order $order): array => [
                     'id' => $order->id,
                     'customer_id' => $order->customer_id,
@@ -200,6 +204,20 @@ class SyncPullService
                     'total' => $order->total,
                     'items_count' => (int) $order->items_count,
                     'salesperson_name' => $order->salesperson_name,
+                    'notes' => $order->notes,
+                    'cancellation_reason' => $order->cancellation_reason,
+                    // Lines as they were sold, so the phone shows the order without signal.
+                    'items' => $order->items->map(fn ($item): array => [
+                        'product_id' => $item->product_id,
+                        'product_presentation_id' => $item->product_presentation_id,
+                        'product_sku' => $item->product_sku,
+                        'product_name' => $item->product_name,
+                        'presentation_name' => $item->presentation_name,
+                        'quantity' => $item->quantity,
+                        'unit_price' => $item->unit_price,
+                        'line_total' => $item->line_total,
+                        'notes' => $item->notes,
+                    ])->all(),
                 ])->all(),
             ],
             'route_activity' => [

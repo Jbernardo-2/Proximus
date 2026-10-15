@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProductConversionPreviewController;
 use App\Http\Controllers\Api\V1\ProductPresentationController;
 use App\Http\Controllers\Api\V1\ProductSupplierController;
+use App\Http\Controllers\Api\V1\ProductThumbnailController;
 use App\Http\Controllers\Api\V1\ReopenDeliveryStopController;
 use App\Http\Controllers\Api\V1\ReopenOrderController;
 use App\Http\Controllers\Api\V1\ReplenishInventoryStockController;
@@ -78,6 +79,7 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
             Route::get('/', [SyncController::class, 'manifest'])->name('manifest');
             Route::get('/pull/{resource}', [SyncController::class, 'pull'])->name('pull');
             Route::post('/push', [SyncController::class, 'push'])->name('push');
+            Route::get('/product-images/{product}', ProductThumbnailController::class)->name('product-images.show');
         });
 
         Route::middleware('can:access-panel')->group(function (): void {
