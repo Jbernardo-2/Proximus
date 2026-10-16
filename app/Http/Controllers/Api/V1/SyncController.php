@@ -17,6 +17,7 @@ use App\SettlementMethod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class SyncController extends Controller
 {
@@ -27,6 +28,8 @@ class SyncController extends Controller
         $company = CompanyProfile::query()->find(CompanyProfile::SINGLETON_ID);
         $device = Device::current($user);
         $warehouse = Warehouse::query()->active()->orderByDesc('is_default')->orderBy('name')->first();
+
+        $this->alignAbilities($user);
 
         return response()->json([
             'server_time' => now()->toIso8601String(),
@@ -83,6 +86,7 @@ class SyncController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+        $this->alignAbilities($user);
         $validated = $request->validate([
             'operations' => ['required', 'array', 'min:1', 'max:100'],
             'operations.*.client_reference' => ['required', 'string', 'max:100', 'distinct'],
@@ -103,5 +107,19 @@ class SyncController extends Controller
     private function labels(array $cases): array
     {
         return array_map(fn ($case): array => ['value' => $case->value, 'label' => $case->label()], $cases);
+    }
+
+    /**
+     * Abilities are fixed when a token is issued; a phone that stays signed in for weeks
+     * would never get a permission granted (or lose one removed) to its role. Its sync
+     * calls bring the token in line with the role, before any operation is applied.
+     */
+    private function alignAbilities(User $user): void
+    {
+        $token = $user->currentAccessToken();
+
+        if ($token instanceof PersonalAccessToken && $token->exists && $token->abilities !== $user->apiAbilities()) {
+            $token->forceFill(['abilities' => $user->apiAbilities()])->save();
+        }
     }
 }

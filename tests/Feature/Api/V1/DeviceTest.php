@@ -11,8 +11,10 @@ use App\Models\DeliveryRun;
 use App\Models\DeliveryRunOrder;
 use App\Models\DeliverySettlement;
 use App\Models\Device;
+use App\Models\Order;
 use App\Models\SyncOperation;
 use App\Models\User;
+use App\OrderStatus;
 use App\PaymentMethod;
 use App\SettlementMethod;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -173,6 +175,36 @@ class DeviceTest extends TestCase
 
         $this->assertTrue(CustomerAccountEntry::query()->where('receipt_number', 'ABO-M001-000007')->exists());
         $this->getJson('/api/v1/sync', $this->bearer($token))->assertJsonPath('device.series.customer_payment.last_number', 7);
+    }
+
+    public function test_a_phone_signed_in_before_a_permission_was_granted_gets_it_on_its_next_sync(): void
+    {
+        $driver = User::factory()->repartidor()->create();
+        $order = Order::factory()->create(['status' => OrderStatus::Loaded]);
+        DeliveryRunOrder::factory()->create([
+            'delivery_run_id' => DeliveryRun::factory()->create(['driver_id' => $driver->id, 'status' => DeliveryRunStatus::InTransit])->id,
+            'order_id' => $order->id,
+        ]);
+        $debt = CustomerReceivable::factory()->for($order->customer)->create(['outstanding_amount' => '100.0000', 'original_amount' => '100.0000']);
+        $stranger = CustomerReceivable::factory()->create(['outstanding_amount' => '100.0000', 'original_amount' => '100.0000']);
+        $token = $this->login($driver, 'telefono-repartidor')->json('token');
+        // As if the token was issued before drivers could take account payments.
+        PersonalAccessToken::findToken($token)->forceFill(['abilities' => ['deliveries:view', 'deliveries:execute', 'route-reports:view']])->save();
+        $payment = fn (CustomerReceivable $receivable, string $reference): array => ['client_reference' => $reference, 'type' => 'customer.payment', 'payload' => [
+            'customer_id' => $receivable->customer_id,
+            'amount' => '40',
+            'payment_lines' => [['method' => PaymentMethod::Cash->value, 'amount' => '40']],
+            'allocations' => [['receivable_id' => $receivable->id, 'amount' => '40']],
+        ]];
+
+        $results = $this->postJson('/api/v1/sync/push', ['operations' => [$payment($debt, 'tel:abono'), $payment($stranger, 'tel:ajeno')]], $this->bearer($token))
+            ->assertOk()
+            ->json('results');
+
+        $this->assertSame('accepted', $results[0]['status'], 'the token now carries payments:record');
+        $this->assertSame('rejected', $results[1]['status']);
+        $this->assertSame('El abono no se registró: este cliente no está en tus jornadas activas.', $results[1]['message']);
+        $this->assertContains('payments:record', PersonalAccessToken::findToken($token)->abilities);
     }
 
     private function login(User $user, string $installationId): TestResponse

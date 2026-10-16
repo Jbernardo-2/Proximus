@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Models\Customer;
 use App\Models\User;
 use App\UserRole;
+use Illuminate\Auth\Access\Response;
 
 class CustomerPolicy
 {
@@ -29,15 +30,19 @@ class CustomerPolicy
      * Record an account payment: whoever manages customers and sees this one, or a
      * driver who carries an order for them right now (they collect old debts too).
      */
-    public function collect(User $user, Customer $customer): bool
+    public function collect(User $user, Customer $customer): Response
     {
         if (! $user->canRecordCustomerPayments()) {
-            return false;
+            return Response::deny('Tu usuario no puede registrar abonos.');
         }
 
-        return $user->role === UserRole::Repartidor
-            ? Customer::query()->carriedBy($user)->whereKey($customer)->exists()
-            : $this->view($user, $customer);
+        if ($user->role === UserRole::Repartidor) {
+            return Customer::query()->carriedBy($user)->whereKey($customer)->exists()
+                ? Response::allow()
+                : Response::deny('El abono no se registró: este cliente no está en tus jornadas activas.');
+        }
+
+        return $this->view($user, $customer) ? Response::allow() : Response::deny('El abono no se registró: este cliente no está en tus rutas.');
     }
 
     /**
