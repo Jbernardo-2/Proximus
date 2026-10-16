@@ -27,6 +27,11 @@
                             <p class="font-black text-ink-950">{{ $item->product_name }}</p>
                             <p class="text-sm font-semibold text-leaf-700">{{ $item->presentation_name }} · {{ $item->product_sku }}</p>
                             <p class="mt-1 text-xs text-ink-600">1 {{ $item->presentation_name }} = {{ $quantity($item->conversion_factor) }} {{ $item->base_unit_symbol }}</p>
+                            @php($shortage = $shortages->get($item->product_id))
+                            <p class="mt-2 text-xs font-semibold {{ $shortage ? 'text-amber-800' : 'text-ink-600' }}">En bodega: {{ $quantity($onHand[$item->product_id] ?? 0) }} {{ $item->base_unit_symbol }}</p>
+                            @if($shortage)
+                                <p class="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-bold text-amber-800">Esta jornada necesita {{ $shortage['needed'] }} {{ $shortage['unit'] }} y hay {{ $shortage['on_hand'] }}: faltan {{ $shortage['missing'] }}. Merma esta línea o la de otro pedido.</p>
+                            @endif
                         </div>
                         <div class="rounded-xl border border-sky-200 bg-sky-50 p-3 text-center">
                             <p class="text-xs font-bold uppercase text-sky-800">Solicitado</p>

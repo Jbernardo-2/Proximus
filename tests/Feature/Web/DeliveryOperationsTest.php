@@ -375,7 +375,7 @@ class DeliveryOperationsTest extends TestCase
         ])->all());
 
         $this->actingAs($bodeguero)->post(route('delivery-runs.load', $run))
-            ->assertSessionHasErrors('quantity');
+            ->assertSessionHasErrors('stock');
 
         $this->assertSame(DeliveryRunStatus::Preparing, $run->refresh()->status);
         $this->assertSame(OrderStatus::Assigned, $context['order']->refresh()->status);
@@ -390,6 +390,66 @@ class DeliveryOperationsTest extends TestCase
         $this->assertSame(2, InventoryReservation::query()
             ->where('status', InventoryReservationStatus::Active->value)
             ->count());
+    }
+
+    public function test_the_warehouse_sees_every_product_short_and_the_order_that_carries_it_before_and_when_loading(): void
+    {
+        $supervisor = User::factory()->supervisor()->create();
+        $bodeguero = User::factory()->create();
+        $driver = User::factory()->repartidor()->create();
+        $context = $this->confirmedOrder([
+            ['quantity' => '2', 'unit_price' => '10', 'on_hand' => '10'],
+            ['quantity' => '3', 'unit_price' => '20', 'on_hand' => '1'],
+            ['quantity' => '4', 'unit_price' => '5', 'on_hand' => '0'],
+        ]);
+        $order = $context['order'];
+        [$run] = $this->assignedRun($order, $supervisor, $driver);
+        app(StartDeliveryPreparationAction::class)->handle($run, $bodeguero);
+        $runOrder = $run->runOrders()->sole();
+        $short = $context['lines'][1]['product'];
+        $empty = $context['lines'][2]['product'];
+
+        // Before preparing: the run page already warns, counting what was requested.
+        $this->actingAs($bodeguero)->get(route('delivery-runs.show', $run))
+            ->assertOk()
+            ->assertSee('No alcanza la existencia de 2 productos')
+            ->assertSee($short->name)
+            ->assertSee('Hay 1 ')
+            ->assertSee('faltan 2')
+            ->assertSee($order->order_number)
+            ->assertSee('Falta existencia')
+            ->assertSee(route('delivery-runs.orders.preparation.edit', [$run, $runOrder]), false);
+        $this->get(route('delivery-runs.orders.preparation.edit', [$run, $runOrder]))
+            ->assertOk()
+            ->assertSee('En bodega: 1')
+            ->assertSee('Esta jornada necesita 3');
+
+        app(SaveDeliveryPreparationAction::class)->handle($run, $runOrder->items()->get()->map(fn ($item): array => [
+            'id' => $item->id,
+            'prepared_quantity' => $item->requested_quantity,
+        ])->all());
+
+        // One message with both products and the order, instead of one at a time.
+        $errors = $this->post(route('delivery-runs.load', $run))->assertSessionHasErrors('stock')->getSession()->get('errors')->get('stock');
+        $this->assertCount(3, $errors);
+        $this->assertStringContainsString('2 productos', $errors[0]);
+        $this->assertStringContainsString("{$short->name}: hay 1", implode(' ', $errors));
+        $this->assertStringContainsString("{$empty->name}: hay 0", implode(' ', $errors));
+        $this->assertStringContainsString($order->order_number, $errors[1]);
+        $this->get(route('delivery-runs.show', $run))->assertSee('pero falta existencia')->assertDontSee('Confirmar carga completa');
+
+        // Trimmed to what is on hand, it loads.
+        $items = $runOrder->items()->orderBy('id')->get();
+        app(SaveDeliveryPreparationAction::class)->handle($run, $items->map(fn ($item): array => [
+            'id' => $item->id,
+            'prepared_quantity' => match ($item->product_id) {
+                $short->id => '1',
+                $empty->id => '0',
+                default => $item->requested_quantity,
+            },
+        ])->all());
+        $this->post(route('delivery-runs.load', $run))->assertSessionHasNoErrors();
+        $this->assertSame(DeliveryRunStatus::Loaded, $run->refresh()->status);
     }
 
     public function test_product_in_transit_cannot_be_archived_even_when_warehouse_balance_is_zero(): void

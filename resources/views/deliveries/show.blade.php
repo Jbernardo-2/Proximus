@@ -134,18 +134,46 @@
                             </div>
                             <progress class="mt-4 h-2 w-full overflow-hidden rounded-full accent-leaf-600" value="{{ $preparedOrdersCount }}" max="{{ max($deliveryRun->runOrders->count(), 1) }}">{{ $preparedOrdersCount }} de {{ $deliveryRun->runOrders->count() }}</progress>
                         </header>
+                        @if($loadShortages->isNotEmpty())
+                            {{-- Before anyone tries to confirm: what does not fit in stock and which orders carry it. --}}
+                            <div class="border-b border-amber-200 bg-amber-50 p-5 sm:p-6" id="load-shortages" role="alert">
+                                <h3 class="font-black text-amber-950">No alcanza la existencia de {{ $loadShortages->count() === 1 ? '1 producto' : $loadShortages->count().' productos' }}</h3>
+                                <p class="mt-1 text-sm text-amber-900">Merma o retira esas líneas en la preparación de cada pedido. Los pedidos sin preparar cuentan lo solicitado.</p>
+                                <div class="mt-4 space-y-3">
+                                    @foreach($loadShortages as $shortage)
+                                        <div class="rounded-xl border border-amber-200 bg-white p-4">
+                                            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                                                <p class="font-black text-ink-950">{{ $shortage['product_name'] }}</p>
+                                                <p class="text-sm font-bold text-amber-800">Hay {{ $shortage['on_hand'] }} {{ $shortage['unit'] }} · se necesitan {{ $shortage['needed'] }} · faltan {{ $shortage['missing'] }}</p>
+                                            </div>
+                                            <ul class="mt-2 divide-y divide-stone-100">
+                                                @foreach($shortage['orders'] as $line)
+                                                    <li class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                                                        <span><span class="font-semibold text-ink-950">{{ $line['order_number'] }}</span> · {{ $line['customer_name'] }} · {{ $line['quantity'] }} {{ $line['presentation'] }}@unless($line['prepared']) <span class="text-ink-600">(sin preparar)</span>@endunless</span>
+                                                        <a class="btn-secondary px-3 py-1.5 text-xs" href="{{ route('delivery-runs.orders.preparation.edit', [$deliveryRun, $line['run_order_id']]) }}">Preparar</a>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                        @php($shortOrders = $loadShortages->flatMap(fn (array $shortage) => collect($shortage['orders'])->pluck('run_order_id'))->unique())
                         <div class="divide-y divide-stone-100">
                             @foreach($deliveryRun->runOrders as $runOrder)
                                 @php($prepared = $runOrder->status === \App\DeliveryOrderStatus::Prepared)
                                 <article class="grid items-center gap-4 p-5 lg:grid-cols-[5rem_minmax(0,1fr)_auto] {{ $prepared ? 'bg-emerald-50/50' : '' }}">
                                     <div class="grid size-14 place-items-center rounded-2xl {{ $prepared ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-950' }} text-xl font-black">#{{ $runOrder->visit_order }}</div>
-                                    <div><div class="flex flex-wrap items-center gap-2"><h3 class="font-black text-ink-950">{{ $runOrder->order->customer_name }}</h3><x-delivery-order-status-badge :status="$runOrder->status" /></div><p class="text-sm text-ink-600">{{ $runOrder->order->order_number }} · {{ $runOrder->items->count() }} líneas · {{ $currency }} {{ number_format((float) $runOrder->requested_total, 2) }}</p>@if($prepared)<p class="mt-1 text-xs font-semibold text-emerald-700">Guardado {{ $runOrder->prepared_at?->format('d/m/Y H:i') }} por {{ $runOrder->preparedBy?->name ?: 'el equipo de bodega' }}</p>@else<p class="mt-1 text-xs font-semibold text-amber-700">Pendiente de registrar cantidades</p>@endif</div>
+                                    <div><div class="flex flex-wrap items-center gap-2"><h3 class="font-black text-ink-950">{{ $runOrder->order->customer_name }}</h3><x-delivery-order-status-badge :status="$runOrder->status" />@if($shortOrders->contains($runOrder->id))<span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">Falta existencia</span>@endif</div><p class="text-sm text-ink-600">{{ $runOrder->order->order_number }} · {{ $runOrder->items->count() }} líneas · {{ $currency }} {{ number_format((float) $runOrder->requested_total, 2) }}</p>@if($prepared)<p class="mt-1 text-xs font-semibold text-emerald-700">Guardado {{ $runOrder->prepared_at?->format('d/m/Y H:i') }} por {{ $runOrder->preparedBy?->name ?: 'el equipo de bodega' }}</p>@else<p class="mt-1 text-xs font-semibold text-amber-700">Pendiente de registrar cantidades</p>@endif</div>
                                     <a class="{{ $prepared ? 'btn-secondary' : 'btn-primary' }}" href="{{ route('delivery-runs.orders.preparation.edit', [$deliveryRun, $runOrder]) }}">{{ $prepared ? 'Revisar preparación' : 'Preparar pedido' }}</a>
                                 </article>
                             @endforeach
                         </div>
                         @if($canLoad)
-                            @if($allOrdersPrepared)
+                            @if($allOrdersPrepared && $loadShortages->isNotEmpty())
+                                <div class="border-t border-amber-200 bg-amber-50 p-5 sm:p-6"><h3 class="font-black text-amber-950">Todos los pedidos están preparados, pero falta existencia</h3><p class="mt-1 text-sm leading-6 text-amber-900">Corrige los productos de la lista de arriba y luego confirma la carga.</p><a class="btn-secondary mt-4" href="#load-shortages">Ver faltantes</a></div>
+                            @elseif($allOrdersPrepared)
                                 <div class="border-t border-indigo-200 bg-indigo-50 p-5 sm:p-6"><h3 class="font-black text-indigo-950">Todos los pedidos están preparados</h3><p class="mt-1 text-sm leading-6 text-indigo-900">Al confirmar, la salida de todos los productos se ejecutará dentro de una sola transacción. Si una existencia falla, no se descontará nada.</p><form class="mt-4" method="POST" action="{{ route('delivery-runs.load', $deliveryRun) }}" data-confirm="¿Confirmar la carga completa? Las cantidades dejarán de ser editables.">@csrf<button class="btn-primary" type="submit">Confirmar carga completa</button></form></div>
                             @else
                                 <div class="border-t border-amber-200 bg-amber-50 p-5"><p class="font-bold text-amber-950">Faltan {{ $pendingPreparationCount }} {{ $pendingPreparationCount === 1 ? 'pedido' : 'pedidos' }}</p><p class="text-sm text-amber-900">Cuando todos estén preparados aparecerá el botón para confirmar la carga e iniciar la ruta.</p></div>

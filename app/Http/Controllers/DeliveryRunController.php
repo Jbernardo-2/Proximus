@@ -20,6 +20,7 @@ use App\Models\Warehouse;
 use App\OrderStatus;
 use App\PaymentTerm;
 use App\Services\DeliveryInvoiceService;
+use App\Services\DeliveryLoadShortages;
 use App\SettlementMethod;
 use App\UserRole;
 use DateTimeImmutable;
@@ -58,7 +59,7 @@ class DeliveryRunController extends Controller
             ->orderByRaw('requested_delivery_date is null')
             ->orderBy('requested_delivery_date')
             ->orderBy('route_visit_order')
-            
+
             ->orderBy('order_number')
             ->paginate(10, ['*'], 'orders_page')
             ->withQueryString();
@@ -162,7 +163,7 @@ class DeliveryRunController extends Controller
             ->with('success', 'Jornada creada. Ahora asigna los pedidos confirmados.');
     }
 
-    public function show(Request $request, DeliveryRun $deliveryRun, DeliveryInvoiceService $invoiceService): View
+    public function show(Request $request, DeliveryRun $deliveryRun, DeliveryInvoiceService $invoiceService, DeliveryLoadShortages $shortages): View
     {
         Gate::authorize('view', $deliveryRun);
         /** @var User $user */
@@ -257,6 +258,7 @@ class DeliveryRunController extends Controller
                 ->orderBy('order_number')
                 ->get() : collect(),
             'pickingSummary' => $pickingSummary,
+            'loadShortages' => $deliveryRun->status === DeliveryRunStatus::Preparing ? $shortages->for($deliveryRun) : collect(),
             'reportRoutes' => $reportRoutes,
             'inventoryStocks' => InventoryStock::query()
                 ->where('warehouse_id', $deliveryRun->warehouse_id)

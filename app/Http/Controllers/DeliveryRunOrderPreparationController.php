@@ -6,14 +6,16 @@ use App\Actions\SaveDeliveryOrderPreparationAction;
 use App\Http\Requests\UpdateDeliveryOrderPreparationRequest;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunOrder;
+use App\Models\InventoryStock;
 use App\Models\User;
+use App\Services\DeliveryLoadShortages;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 class DeliveryRunOrderPreparationController extends Controller
 {
-    public function edit(DeliveryRun $deliveryRun, DeliveryRunOrder $runOrder): View
+    public function edit(DeliveryRun $deliveryRun, DeliveryRunOrder $runOrder, DeliveryLoadShortages $shortages): View
     {
         Gate::authorize('prepare', $deliveryRun);
         abort_unless($runOrder->delivery_run_id === $deliveryRun->id, 404);
@@ -24,7 +26,16 @@ class DeliveryRunOrderPreparationController extends Controller
             'items' => fn ($query) => $query->with(['product', 'presentation'])->orderBy('product_name')->orderBy('id'),
         ]);
 
-        return view('deliveries.preparation', compact('deliveryRun', 'runOrder'));
+        return view('deliveries.preparation', [
+            'deliveryRun' => $deliveryRun,
+            'runOrder' => $runOrder,
+            // Stock next to each line, and what the whole run needs when it does not fit.
+            'onHand' => InventoryStock::query()
+                ->where('warehouse_id', $deliveryRun->warehouse_id)
+                ->whereIn('product_id', $runOrder->items->pluck('product_id'))
+                ->pluck('quantity_on_hand', 'product_id'),
+            'shortages' => $shortages->for($deliveryRun)->keyBy('product_id'),
+        ]);
     }
 
     public function update(

@@ -12,6 +12,7 @@ use App\Models\InventoryReservation;
 use App\Models\Order;
 use App\Models\User;
 use App\OrderStatus;
+use App\Services\DeliveryLoadShortages;
 use App\Services\OperationalNotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,7 @@ class ConfirmDeliveryLoadAction
     public function __construct(
         private ApplyInventoryDeltaAction $applyDelta,
         private OperationalNotificationService $notifications,
+        private DeliveryLoadShortages $shortages,
     ) {}
 
     public function handle(DeliveryRun $deliveryRun, User $actor): DeliveryRun
@@ -67,6 +69,21 @@ class ConfirmDeliveryLoadAction
                         'items' => ["El pedido {$runOrder->order->order_number} no tiene mercancía preparada; retíralo o prepara al menos una línea."],
                     ]);
                 }
+            }
+
+            // Every product short at once, with the orders that carry it, instead of
+            // stopping at the first one with only its name.
+            $shortages = $this->shortages->for($run);
+
+            if ($shortages->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'stock' => [
+                        $shortages->count() === 1
+                            ? 'No alcanza la existencia de 1 producto para cargar esta jornada. Merma o retira esas líneas en su preparación:'
+                            : "No alcanza la existencia de {$shortages->count()} productos para cargar esta jornada. Merma o retira esas líneas en su preparación:",
+                        ...$this->shortages->messages($shortages),
+                    ],
+                ]);
             }
 
             $loadedTotal = '0.0000';
