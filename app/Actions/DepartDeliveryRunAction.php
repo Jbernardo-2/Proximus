@@ -7,14 +7,16 @@ use App\Models\DeliveryRun;
 use App\Models\Order;
 use App\Models\User;
 use App\OrderStatus;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class DepartDeliveryRunAction
 {
-    public function handle(DeliveryRun $deliveryRun, User $actor): DeliveryRun
+    /** $departedAt is when it happened: the phone's time for a departure recorded offline. */
+    public function handle(DeliveryRun $deliveryRun, User $actor, ?CarbonInterface $departedAt = null): DeliveryRun
     {
-        return DB::transaction(function () use ($deliveryRun, $actor): DeliveryRun {
+        return DB::transaction(function () use ($deliveryRun, $actor, $departedAt): DeliveryRun {
             $run = DeliveryRun::query()->lockForUpdate()->findOrFail($deliveryRun->id);
 
             if ($run->status !== DeliveryRunStatus::Loaded) {
@@ -43,7 +45,7 @@ class DepartDeliveryRunAction
 
             $run->forceFill([
                 'status' => DeliveryRunStatus::InTransit,
-                'departed_at' => now(),
+                'departed_at' => $departedAt ?? now(),
                 'departed_by' => $actor->id,
             ])->save();
             $run->statusHistory()->create([

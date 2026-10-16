@@ -113,7 +113,8 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
 | Recurso | Admin / Supervisor | Preventista | Repartidor | Bodeguero |
 |---|---|---|---|---|
 | products, stocks | ✓ | ✓ | ✓ | ✓ |
-| routes, customers, customer_credit | ✓ (todos) | ✓ (solo sus rutas) | — | — |
+| routes | ✓ (todos) | ✓ (solo sus rutas) | — | — |
+| customers, customer_credit | ✓ (todos) | ✓ (solo sus rutas) | ✓ (solo los clientes de sus jornadas cargadas, en ruta o por liquidar) | — |
 | receivables | ✓ (todos) | ✓ (solo sus rutas) | — | — |
 | route_activity | — | ✓ (sus paradas de hoy) | — | — |
 | recent_orders | ✓ (todos) | ✓ (sus clientes) | — | — |
@@ -330,6 +331,16 @@ Opcional en todas las operaciones. Se captura automáticamente al guardar, sin p
 ```
 
 `reason` viene de `catalogs.visit_reasons`.
+
+#### `delivery.depart`: salida de la jornada
+
+```json
+{ "delivery_run_id": "01J…", "location": { … } }
+```
+
+- Pasa la jornada cargada a "en ruta" con la hora del teléfono (`location.captured_at`).
+- Debe ir en la cola antes del primer `delivery.outcome` de esa jornada.
+- Si al llegar la jornada ya salió (la marcó el supervisor en la web o se envió dos veces), se acepta sin cambios.
 
 #### `delivery.outcome`: resultado de la entrega
 

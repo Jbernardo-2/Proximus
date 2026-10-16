@@ -25,6 +25,7 @@ class SyncPushService
         'customer.create' => ['POST', '/api/v1/customers'],
         'order.create' => ['POST', '/api/v1/orders'],
         'visit.no_sale' => ['POST', '/api/v1/customers/{customer_id}/visits'],
+        'delivery.depart' => ['POST', '/api/v1/delivery-runs/{delivery_run_id}/depart'],
         'delivery.outcome' => ['PUT', '/api/v1/delivery-runs/{delivery_run_id}/orders/{run_order_id}/outcome'],
         'delivery.payment' => ['POST', '/api/v1/delivery-runs/{delivery_run_id}/orders/{run_order_id}/payments'],
         'customer.payment' => ['POST', '/api/v1/customers/{customer_id}/payments'],
@@ -40,7 +41,7 @@ class SyncPushService
             ->filter(fn (string $operation): bool => match ($operation) {
                 'customer.create' => Gate::forUser($user)->allows('create', Customer::class),
                 'order.create', 'visit.no_sale' => Gate::forUser($user)->allows('manage-orders'),
-                'delivery.outcome', 'delivery.payment' => Gate::forUser($user)->allows('execute-deliveries'),
+                'delivery.depart', 'delivery.outcome', 'delivery.payment' => Gate::forUser($user)->allows('execute-deliveries'),
                 'customer.payment' => Gate::forUser($user)->allows('record-customer-payments'),
             })
             ->values()

@@ -68,9 +68,11 @@ class SyncApiTest extends TestCase
         Sanctum::actingAs($driver, $driver->apiAbilities());
         $this->getJson('/api/v1/sync')
             ->assertJsonPath('resources.delivery_runs.available', true)
-            ->assertJsonPath('resources.customers.available', false)
+            ->assertJsonPath('resources.customers.available', true)
+            ->assertJsonPath('resources.customer_credit.available', true)
+            ->assertJsonPath('resources.receivables.available', false)
             ->assertJsonPath('resources.route_activity.available', false)
-            ->assertJsonFragment(['operations' => ['delivery.outcome', 'delivery.payment']]);
+            ->assertJsonFragment(['operations' => ['delivery.depart', 'delivery.outcome', 'delivery.payment']]);
     }
 
     public function test_daily_route_activity_reports_only_todays_assigned_stops_and_latest_result(): void
@@ -393,6 +395,61 @@ class SyncApiTest extends TestCase
         $this->assertSame('30.0000', $run->refresh()->transfer_total);
         $this->assertSame(2, CustomerVisit::query()->count());
         $this->assertSame(1, SyncOperation::query()->where('status', SyncOperation::REJECTED)->count());
+    }
+
+    public function test_a_driver_gets_the_contact_and_credit_of_the_customers_on_the_runs_they_carry_only(): void
+    {
+        $driver = User::factory()->repartidor()->create();
+        $onBoard = Order::factory()->create(['status' => OrderStatus::Loaded]);
+        $delivered = Order::factory()->create(['status' => OrderStatus::Delivered]);
+        $otherDriver = Order::factory()->create(['status' => OrderStatus::Loaded]);
+        $onBoard->customer->update(['phone' => '9999-0001', 'latitude' => '14.7650000', 'longitude' => '-88.7790000']);
+        CustomerCreditProfile::factory()->create(['customer_id' => $onBoard->customer_id, 'credit_limit' => '1000.0000']);
+        $run = fn (Order $order, DeliveryRunStatus $status, ?User $who = null) => DeliveryRunOrder::factory()->create([
+            'delivery_run_id' => DeliveryRun::factory()->create(['driver_id' => ($who ?? $driver)->id, 'status' => $status])->id,
+            'order_id' => $order->id,
+        ]);
+        $run($onBoard, DeliveryRunStatus::Loaded);
+        $run($delivered, DeliveryRunStatus::Settled);
+        $run($otherDriver, DeliveryRunStatus::Loaded, User::factory()->repartidor()->create());
+        Sanctum::actingAs($driver, $driver->apiAbilities());
+
+        $this->getJson('/api/v1/sync/pull/customers')
+            ->assertOk()
+            ->assertJsonCount(1, 'records')
+            ->assertJsonPath('records.0.id', $onBoard->customer_id)
+            ->assertJsonPath('records.0.phone', '9999-0001')
+            ->assertJsonPath('records.0.latitude', '14.7650000');
+        $this->getJson('/api/v1/sync/pull/customer_credit')
+            ->assertJsonCount(1, 'records')
+            ->assertJsonPath('records.0.available_credit', '1000.0000');
+        $this->getJson('/api/v1/sync/pull/receivables')->assertForbidden();
+    }
+
+    public function test_a_departure_recorded_without_signal_keeps_the_phone_time_and_is_accepted_if_the_run_already_left(): void
+    {
+        $driver = User::factory()->repartidor()->create();
+        $run = DeliveryRun::factory()->create(['driver_id' => $driver->id, 'status' => DeliveryRunStatus::Loaded]);
+        $order = Order::factory()->create(['status' => OrderStatus::Loaded]);
+        DeliveryRunOrder::factory()->create(['delivery_run_id' => $run->id, 'order_id' => $order->id, 'visit_order' => 1, 'status' => DeliveryOrderStatus::Loaded]);
+        Sanctum::actingAs($driver, $driver->apiAbilities());
+        $leftAt = now()->subHour()->startOfSecond();
+        $depart = fn (string $reference): array => ['client_reference' => $reference, 'type' => 'delivery.depart', 'payload' => [
+            'delivery_run_id' => $run->id,
+            'location' => ['status' => 'unavailable', 'captured_at' => $leftAt->toIso8601String()],
+        ]];
+
+        $this->postJson('/api/v1/sync/push', ['operations' => [$depart('tel-9:salida')]])
+            ->assertJsonPath('results.0.status', 'accepted');
+
+        $run->refresh();
+        $this->assertSame(DeliveryRunStatus::InTransit, $run->status);
+        $this->assertTrue($run->departed_at->equalTo($leftAt), 'the run left when the phone says, not when it synced');
+        $this->assertSame(OrderStatus::InTransit, $order->refresh()->status);
+
+        $this->postJson('/api/v1/sync/push', ['operations' => [$depart('tel-9:salida-otra-vez')]])
+            ->assertJsonPath('results.0.status', 'accepted');
+        $this->postJson("/api/v1/delivery-runs/{$run->id}/depart")->assertForbidden();
     }
 
     public function test_offline_credit_delivery_to_a_customer_over_the_limit_is_kept_as_an_exception(): void

@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\CustomerCreditProfile;
 use App\Models\CustomerReceivable;
 use App\Models\DeliveryRun;
+use App\Models\DeliveryRunOrder;
 use App\Models\InventoryStock;
 use App\Models\Order;
 use App\Models\PriceTier;
@@ -44,6 +45,9 @@ class SyncPullService
 
     /** Orders the phone keeps per customer for its profile. */
     private const int RECENT_ORDER_DAYS = 30;
+
+    /** Runs a driver still carries: loaded, on the road, or waiting to be settled. */
+    private const array ACTIVE_RUN_STATUSES = [DeliveryRunStatus::Loaded, DeliveryRunStatus::InTransit, DeliveryRunStatus::AwaitingSettlement];
 
     public function __construct(private RouteActivityService $routeActivity, private ProductThumbnails $thumbnails) {}
 
@@ -95,6 +99,9 @@ class SyncPullService
     private function resources(): array
     {
         $takesOrders = fn (User $user): bool => Gate::forUser($user)->allows('manage-orders');
+        // Who visits customers: the preventista taking orders and the driver delivering them.
+        $onTheStreet = fn (User $user): bool => $takesOrders($user)
+            || ($user->role === UserRole::Repartidor && Gate::forUser($user)->allows('execute-deliveries'));
 
         return [
             'products' => [
@@ -228,7 +235,7 @@ class SyncPullService
             ],
             'customers' => [
                 'mode' => 'full',
-                'allowed' => $takesOrders,
+                'allowed' => $onTheStreet,
                 'query' => fn (User $user): Builder => $this->visibleCustomers($user),
                 'map' => fn (Collection $customers): array => $customers->map(fn (Customer $customer): array => [
                     'id' => $customer->id,
@@ -246,7 +253,7 @@ class SyncPullService
             ],
             'customer_credit' => [
                 'mode' => 'full',
-                'allowed' => $takesOrders,
+                'allowed' => $onTheStreet,
                 'query' => fn (User $user): Builder => $this->visibleCustomers($user)->with('creditProfile'),
                 'map' => fn (Collection $customers): array => $this->creditBalances($customers),
             ],
@@ -263,7 +270,7 @@ class SyncPullService
                 'allowed' => fn (User $user): bool => Gate::forUser($user)->allows('view-deliveries') && $user->role !== UserRole::Preventista,
                 'query' => fn (User $user): Builder => DeliveryRun::query()
                     ->visibleTo($user)
-                    ->whereIn('status', [DeliveryRunStatus::Loaded, DeliveryRunStatus::InTransit, DeliveryRunStatus::AwaitingSettlement])
+                    ->whereIn('status', self::ACTIVE_RUN_STATUSES)
                     ->with([
                         'warehouse',
                         'driver',
@@ -283,6 +290,19 @@ class SyncPullService
 
     private function visibleCustomers(User $user): Builder
     {
+        // A driver only gets the customers of the runs they carry now, even if one was
+        // deactivated after ordering: the merchandise still has to reach them.
+        if ($user->role === UserRole::Repartidor) {
+            return Customer::query()->whereIn('id', Order::query()
+                ->select('customer_id')
+                ->whereIn('id', DeliveryRunOrder::query()
+                    ->select('order_id')
+                    ->whereIn('delivery_run_id', DeliveryRun::query()
+                        ->select('id')
+                        ->where('driver_id', $user->id)
+                        ->whereIn('status', self::ACTIVE_RUN_STATUSES))));
+        }
+
         return Customer::query()
             ->active()
             ->visibleTo($user);
