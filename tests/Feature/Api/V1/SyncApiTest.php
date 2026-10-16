@@ -13,6 +13,7 @@ use App\Models\CustomerCreditAuthorization;
 use App\Models\CustomerCreditProfile;
 use App\Models\CustomerReceivable;
 use App\Models\CustomerVisit;
+use App\Models\DeliveryPayment;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunItem;
 use App\Models\DeliveryRunOrder;
@@ -509,6 +510,65 @@ class SyncApiTest extends TestCase
         $this->assertSame(['accepted', 'accepted'], array_column($response->json('results'), 'status'));
         $this->assertSame(DeliveryOrderStatus::NotDelivered, $runOrder->refresh()->status);
         $this->assertSame(DeliveryRunStatus::AwaitingSettlement, $run->refresh()->status, 'its only stop is finished');
+    }
+
+    public function test_a_whole_driver_day_without_signal_is_applied_once_even_if_the_queue_is_sent_twice(): void
+    {
+        $driver = User::factory()->repartidor()->create();
+        $run = DeliveryRun::factory()->create(['driver_id' => $driver->id, 'status' => DeliveryRunStatus::Loaded]);
+        $stops = collect(range(1, 3))->map(function (int $visit) use ($run): array {
+            $order = Order::factory()->create(['status' => OrderStatus::Loaded]);
+            $runOrder = DeliveryRunOrder::factory()->create(['delivery_run_id' => $run->id, 'order_id' => $order->id, 'visit_order' => $visit, 'status' => DeliveryOrderStatus::Loaded]);
+            $item = DeliveryRunItem::factory()->create(['delivery_run_order_id' => $runOrder->id, 'requested_quantity' => '3', 'loaded_quantity' => '3', 'unit_price' => '10.0000']);
+
+            return ['order' => $order, 'runOrder' => $runOrder, 'item' => $item];
+        });
+        CustomerCreditProfile::factory()->create(['customer_id' => $stops[1]['order']->customer_id, 'credit_limit' => '5.0000']);
+        $debt = CustomerReceivable::factory()->for($stops[0]['order']->customer)->create(['outstanding_amount' => '80.0000', 'original_amount' => '80.0000']);
+        Sanctum::actingAs($driver, $driver->apiAbilities());
+        $at = ['status' => 'unavailable', 'captured_at' => now()->subHours(3)->toIso8601String()];
+        $ids = fn (int $stop): array => ['delivery_run_id' => $run->id, 'run_order_id' => $stops[$stop]['runOrder']->id];
+        $outcome = fn (int $stop, string $delivered, string $returned, ?string $reason = null, ?string $receiver = 'Doña Marta'): array => [
+            ...$ids($stop),
+            'receiver_name' => $receiver,
+            'outcome_reason' => $reason,
+            'items' => [['id' => $stops[$stop]['item']->id, 'delivered_quantity' => $delivered, 'returned_quantity' => $returned, 'damaged_quantity' => '0', 'missing_quantity' => '0']],
+            'location' => $at,
+        ];
+        $queue = [
+            ['client_reference' => 'M004:1', 'type' => 'delivery.depart', 'payload' => ['delivery_run_id' => $run->id, 'location' => $at]],
+            ['client_reference' => 'M004:2', 'type' => 'delivery.outcome', 'payload' => $outcome(0, '3', '0')],
+            ['client_reference' => 'M004:3', 'type' => 'delivery.payment', 'payload' => [...$ids(0), 'allocations' => [['method' => 'cash', 'amount' => '30', 'reference' => null]], 'location' => $at]],
+            ['client_reference' => 'M004:4', 'type' => 'customer.payment', 'payload' => [
+                'customer_id' => $debt->customer_id,
+                'amount' => '50',
+                'payment_lines' => [['method' => 'cash', 'amount' => '50']],
+                'allocations' => [['receivable_id' => $debt->id, 'amount' => '50']],
+                'location' => $at,
+            ]],
+            ['client_reference' => 'M004:5', 'type' => 'delivery.outcome', 'payload' => $outcome(1, '2', '1', 'customer_rejected')],
+            ['client_reference' => 'M004:6', 'type' => 'delivery.payment', 'payload' => [
+                ...$ids(1),
+                'allocations' => [['method' => 'cash', 'amount' => '10', 'reference' => null], ['method' => 'credit', 'amount' => '10']],
+                'credit_reason' => 'Cliente de años',
+                'location' => $at,
+            ]],
+            ['client_reference' => 'M004:7', 'type' => 'delivery.outcome', 'payload' => $outcome(2, '0', '3', 'business_closed', null)],
+        ];
+
+        $first = $this->postJson('/api/v1/sync/push', ['operations' => $queue])->assertOk()->json('results');
+        $again = $this->postJson('/api/v1/sync/push', ['operations' => $queue])->assertOk()->json('results');
+
+        $this->assertSame(array_fill(0, 7, 'accepted'), array_column($first, 'status'), json_encode($first));
+        $this->assertSame(array_fill(0, 7, 'duplicate'), array_column($again, 'status'), 'resending the same day changes nothing');
+        $run->refresh();
+        $this->assertSame(DeliveryRunStatus::AwaitingSettlement, $run->status);
+        $this->assertSame('40.0000', $run->cash_expected, 'only the delivery cash; the account payment is apart');
+        $this->assertSame('10.0000', $run->credit_total);
+        $this->assertSame(DeliveryOrderStatus::NotDelivered, $stops[2]['runOrder']->refresh()->status);
+        $this->assertSame('30.0000', $debt->refresh()->outstanding_amount);
+        $this->assertSame(2, DeliveryPayment::query()->count(), 'one cash payment per paid stop, not repeated');
+        $this->assertSame(1, CustomerCreditAuthorization::query()->count(), 'credit over the limit is kept as an exception');
     }
 
     public function test_offline_credit_delivery_to_a_customer_over_the_limit_is_kept_as_an_exception(): void
