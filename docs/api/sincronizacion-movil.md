@@ -384,6 +384,7 @@ Opcional en todas las operaciones. Se captura automáticamente al guardar, sin p
 - `reference` solo es obligatoria para tarjeta y cheque (`requires_reference` en el catálogo).
 - La línea de crédito no lleva `receipt_number`.
 - Requiere que el `delivery.outcome` de esa parada se haya aceptado antes; en la cola debe ir después.
+- La app agrega `invoice` (la factura tal como se imprimió, para reimprimirla) y `outcome_reason_label` en `delivery.outcome`; el servidor los ignora.
 
 #### `customer.payment`: abono a cuenta
 
