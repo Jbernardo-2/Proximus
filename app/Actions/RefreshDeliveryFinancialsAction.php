@@ -6,12 +6,15 @@ use App\DeliveryOrderStatus;
 use App\DeliveryPaymentStatus;
 use App\Models\DeliveryRun;
 use App\PaymentMethod;
+use App\Services\DeliveryRunAccountPayments;
 use App\SettlementMethod;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class RefreshDeliveryFinancialsAction
 {
+    public function __construct(private DeliveryRunAccountPayments $accountPayments) {}
+
     public function handle(DeliveryRun $deliveryRun): DeliveryRun
     {
         return DB::transaction(function () use ($deliveryRun): DeliveryRun {
@@ -67,13 +70,20 @@ class RefreshDeliveryFinancialsAction
                 }
             }
 
+            // The driver hands over the cash of old debts collected on the way too.
+            $accountPayments = $this->accountPayments->byMethod($this->accountPayments->for($run));
+            $accountPaymentCash = bcadd($accountPayments[PaymentMethod::Cash->value] ?? '0', '0', 4);
+            $accountPaymentTotal = array_reduce($accountPayments, fn (string $sum, string $amount): string => bcadd($sum, $amount, 4), '0.0000');
+            $cashExpected = bcadd($methodTotals[PaymentMethod::Cash->value], $accountPaymentCash, 4);
             $cashDifference = $run->cash_declared === null
                 ? '0.0000'
-                : bcsub((string) $run->cash_declared, $methodTotals[PaymentMethod::Cash->value], 4);
+                : bcsub((string) $run->cash_declared, $cashExpected, 4);
             $run->forceFill([
                 'delivered_total' => $deliveredTotal,
                 'collected_total' => $collectedTotal,
-                'cash_expected' => $methodTotals[PaymentMethod::Cash->value],
+                'cash_expected' => $cashExpected,
+                'account_payment_cash' => $accountPaymentCash,
+                'account_payment_total' => $accountPaymentTotal,
                 'cash_difference' => $cashDifference,
                 'transfer_total' => $methodTotals[PaymentMethod::BankTransfer->value],
                 'card_total' => $methodTotals[PaymentMethod::Card->value],

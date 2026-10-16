@@ -123,6 +123,8 @@ class DeliveryRun extends Model
             'delivered_total' => 'decimal:4',
             'collected_total' => 'decimal:4',
             'cash_expected' => 'decimal:4',
+            'account_payment_cash' => 'decimal:4',
+            'account_payment_total' => 'decimal:4',
             'cash_declared' => 'decimal:4',
             'cash_difference' => 'decimal:4',
             'transfer_total' => 'decimal:4',

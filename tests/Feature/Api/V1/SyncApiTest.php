@@ -563,7 +563,8 @@ class SyncApiTest extends TestCase
         $this->assertSame(array_fill(0, 7, 'duplicate'), array_column($again, 'status'), 'resending the same day changes nothing');
         $run->refresh();
         $this->assertSame(DeliveryRunStatus::AwaitingSettlement, $run->status);
-        $this->assertSame('40.0000', $run->cash_expected, 'only the delivery cash; the account payment is apart');
+        $this->assertSame('90.0000', $run->cash_expected, 'delivery cash (40) plus the old debt collected on the way (50)');
+        $this->assertSame('50.0000', $run->account_payment_cash);
         $this->assertSame('10.0000', $run->credit_total);
         $this->assertSame(DeliveryOrderStatus::NotDelivered, $stops[2]['runOrder']->refresh()->status);
         $this->assertSame('30.0000', $debt->refresh()->outstanding_amount);

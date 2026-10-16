@@ -35,6 +35,8 @@ class DeliveryRunResource extends JsonResource
                 'delivered_total' => $this->delivered_total,
                 'collected_total' => $this->collected_total,
                 'cash_expected' => $this->cash_expected,
+                'account_payment_cash' => $this->account_payment_cash,
+                'account_payment_total' => $this->account_payment_total,
                 'cash_declared' => $this->cash_declared,
                 'cash_difference' => $this->cash_difference,
                 'transfer_total' => $this->transfer_total,
