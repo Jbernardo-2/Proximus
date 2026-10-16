@@ -2,14 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\DeliveryRunStatus;
 use App\Models\Customer;
 use App\Models\CustomerReceivable;
+use App\Models\DeliveryRun;
 use App\Models\InventoryStock;
 use App\Models\Product;
 use App\Models\RouteStop;
 use App\Models\SalesRoute;
 use App\Models\User;
+use App\OrderStatus;
 use App\UserRole;
+use Database\Seeders\FieldTestDeliverySeeder;
 use Database\Seeders\FieldTestSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -47,5 +51,26 @@ class FieldTestSeederTest extends TestCase
         $this->assertTrue($credit[$customer(22)]['allows_credit']);
         $this->assertSame('500.0000', $credit[$customer(23)]['credit_limit']);
         $this->assertNotSame('0.0000', $credit[$customer(38)]['overdue']);
+    }
+
+    public function test_it_loads_a_run_for_the_driver_through_the_warehouse_steps_and_waits_until_it_leaves(): void
+    {
+        User::factory()->create(['role' => UserRole::Admin]);
+        User::factory()->create(['role' => UserRole::Preventista, 'email' => 'preventista@gmail.com']);
+        $driver = User::factory()->repartidor()->create(['email' => 'repartidor@gmail.com']);
+        $this->seed(FieldTestSeeder::class);
+
+        $this->seed(FieldTestDeliverySeeder::class);
+        $this->seed(FieldTestDeliverySeeder::class);
+
+        $run = DeliveryRun::query()->sole();
+        $this->assertSame(DeliveryRunStatus::Loaded, $run->status);
+        $this->assertSame($driver->id, $run->driver_id);
+        $this->assertSame(FieldTestDeliverySeeder::STOPS, $run->runOrders()->count());
+        $this->assertSame(OrderStatus::Loaded, $run->runOrders()->first()->order->status);
+
+        Sanctum::actingAs($driver, $driver->apiAbilities());
+        $this->getJson('/api/v1/sync/pull/delivery_runs')->assertJsonCount(1, 'records')->assertJsonCount(FieldTestDeliverySeeder::STOPS, 'records.0.orders');
+        $this->getJson('/api/v1/sync/pull/customers')->assertJsonCount(FieldTestDeliverySeeder::STOPS, 'records');
     }
 }
