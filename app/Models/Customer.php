@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\DeliveryRunStatus;
 use App\UserRole;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -83,6 +84,19 @@ class Customer extends Model
                     ),
             ),
         );
+    }
+
+    /** Customers whose orders a driver carries now: runs loaded, on the road or awaiting settlement. */
+    public function scopeCarriedBy(Builder $query, User $driver): Builder
+    {
+        return $query->whereIn('id', Order::query()
+            ->select('customer_id')
+            ->whereIn('id', DeliveryRunOrder::query()
+                ->select('order_id')
+                ->whereIn('delivery_run_id', DeliveryRun::query()
+                    ->select('id')
+                    ->where('driver_id', $driver->id)
+                    ->whereIn('status', [DeliveryRunStatus::Loaded, DeliveryRunStatus::InTransit, DeliveryRunStatus::AwaitingSettlement]))));
     }
 
     protected function casts(): array

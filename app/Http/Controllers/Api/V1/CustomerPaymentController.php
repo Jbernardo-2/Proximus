@@ -22,7 +22,7 @@ class CustomerPaymentController extends Controller
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
-        Gate::authorize('view', $customer);
+        Gate::authorize('collect', $customer);
         $payment = $recordPayment->handle($customer, $request->validated(), $user);
         $recordVisit->forRequest($request, CustomerVisitType::AccountPayment, $customer, $payment);
 

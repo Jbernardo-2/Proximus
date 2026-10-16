@@ -70,9 +70,9 @@ class SyncApiTest extends TestCase
             ->assertJsonPath('resources.delivery_runs.available', true)
             ->assertJsonPath('resources.customers.available', true)
             ->assertJsonPath('resources.customer_credit.available', true)
-            ->assertJsonPath('resources.receivables.available', false)
+            ->assertJsonPath('resources.receivables.available', true)
             ->assertJsonPath('resources.route_activity.available', false)
-            ->assertJsonFragment(['operations' => ['delivery.depart', 'delivery.outcome', 'delivery.payment']]);
+            ->assertJsonFragment(['operations' => ['delivery.depart', 'delivery.outcome', 'delivery.payment', 'customer.payment']]);
     }
 
     public function test_daily_route_activity_reports_only_todays_assigned_stops_and_latest_result(): void
@@ -423,7 +423,36 @@ class SyncApiTest extends TestCase
         $this->getJson('/api/v1/sync/pull/customer_credit')
             ->assertJsonCount(1, 'records')
             ->assertJsonPath('records.0.available_credit', '1000.0000');
-        $this->getJson('/api/v1/sync/pull/receivables')->assertForbidden();
+    }
+
+    public function test_a_driver_collects_old_debts_of_the_customers_they_carry_and_no_one_else(): void
+    {
+        $driver = User::factory()->repartidor()->create();
+        $onBoard = Order::factory()->create(['status' => OrderStatus::Loaded]);
+        DeliveryRunOrder::factory()->create([
+            'delivery_run_id' => DeliveryRun::factory()->create(['driver_id' => $driver->id, 'status' => DeliveryRunStatus::InTransit])->id,
+            'order_id' => $onBoard->id,
+        ]);
+        $debt = CustomerReceivable::factory()->for($onBoard->customer)->create(['outstanding_amount' => '300.0000', 'original_amount' => '300.0000']);
+        $stranger = CustomerReceivable::factory()->create(['outstanding_amount' => '90.0000', 'original_amount' => '90.0000']);
+        Sanctum::actingAs($driver, $driver->apiAbilities());
+        $payment = fn (CustomerReceivable $receivable, string $reference): array => ['client_reference' => $reference, 'type' => 'customer.payment', 'payload' => [
+            'customer_id' => $receivable->customer_id,
+            'amount' => '50',
+            'payment_lines' => [['method' => 'bank_transfer', 'amount' => '50', 'reference' => 'BAC 77']],
+            'allocations' => [['receivable_id' => $receivable->id, 'amount' => '50']],
+        ]];
+
+        $this->getJson('/api/v1/sync/pull/receivables')
+            ->assertOk()
+            ->assertJsonCount(1, 'records')
+            ->assertJsonPath('records.0.id', $debt->id);
+
+        $results = $this->postJson('/api/v1/sync/push', ['operations' => [$payment($debt, 'M004:abono'), $payment($stranger, 'M004:ajeno')]])->json('results');
+
+        $this->assertSame(['accepted', 'rejected'], array_column($results, 'status'));
+        $this->assertSame('250.0000', $debt->refresh()->outstanding_amount);
+        $this->assertSame('90.0000', $stranger->refresh()->outstanding_amount, 'a customer the driver does not carry');
     }
 
     public function test_a_departure_recorded_without_signal_keeps_the_phone_time_and_is_accepted_if_the_run_already_left(): void

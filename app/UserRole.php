@@ -46,9 +46,10 @@ enum UserRole: string
         return in_array($this, [self::Admin, self::Supervisor], true);
     }
 
+    /** The driver collects old debts at the door as well; which customers, CustomerPolicy::collect decides. */
     public function canRecordCustomerPayments(): bool
     {
-        return in_array($this, [self::Admin, self::Supervisor, self::Preventista], true);
+        return in_array($this, [self::Admin, self::Supervisor, self::Preventista, self::Repartidor], true);
     }
 
     public function canReverseCustomerPayments(): bool

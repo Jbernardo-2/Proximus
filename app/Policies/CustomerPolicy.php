@@ -26,6 +26,21 @@ class CustomerPolicy
     }
 
     /**
+     * Record an account payment: whoever manages customers and sees this one, or a
+     * driver who carries an order for them right now (they collect old debts too).
+     */
+    public function collect(User $user, Customer $customer): bool
+    {
+        if (! $user->canRecordCustomerPayments()) {
+            return false;
+        }
+
+        return $user->role === UserRole::Repartidor
+            ? Customer::query()->carriedBy($user)->whereKey($customer)->exists()
+            : $this->view($user, $customer);
+    }
+
+    /**
      * Determine whether the user can create models.
      */
     public function create(User $user): bool

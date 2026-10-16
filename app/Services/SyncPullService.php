@@ -10,7 +10,6 @@ use App\Models\Customer;
 use App\Models\CustomerCreditProfile;
 use App\Models\CustomerReceivable;
 use App\Models\DeliveryRun;
-use App\Models\DeliveryRunOrder;
 use App\Models\InventoryStock;
 use App\Models\Order;
 use App\Models\PriceTier;
@@ -259,7 +258,7 @@ class SyncPullService
             ],
             'receivables' => [
                 'mode' => 'full',
-                'allowed' => fn (User $user): bool => $takesOrders($user) && Gate::forUser($user)->allows('record-customer-payments'),
+                'allowed' => fn (User $user): bool => $onTheStreet($user) && Gate::forUser($user)->allows('record-customer-payments'),
                 'query' => fn (User $user): Builder => CustomerReceivable::query()
                     ->outstanding()
                     ->whereIn('customer_id', $this->visibleCustomers($user)->select('customers.id')),
@@ -293,14 +292,7 @@ class SyncPullService
         // A driver only gets the customers of the runs they carry now, even if one was
         // deactivated after ordering: the merchandise still has to reach them.
         if ($user->role === UserRole::Repartidor) {
-            return Customer::query()->whereIn('id', Order::query()
-                ->select('customer_id')
-                ->whereIn('id', DeliveryRunOrder::query()
-                    ->select('order_id')
-                    ->whereIn('delivery_run_id', DeliveryRun::query()
-                        ->select('id')
-                        ->where('driver_id', $user->id)
-                        ->whereIn('status', self::ACTIVE_RUN_STATUSES))));
+            return Customer::query()->carriedBy($user);
         }
 
         return Customer::query()

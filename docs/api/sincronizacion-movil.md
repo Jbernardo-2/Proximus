@@ -115,7 +115,7 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
 | products, stocks | ✓ | ✓ | ✓ | ✓ |
 | routes | ✓ (todos) | ✓ (solo sus rutas) | — | — |
 | customers, customer_credit | ✓ (todos) | ✓ (solo sus rutas) | ✓ (solo los clientes de sus jornadas cargadas, en ruta o por liquidar) | — |
-| receivables | ✓ (todos) | ✓ (solo sus rutas) | — | — |
+| receivables | ✓ (todos) | ✓ (solo sus rutas) | ✓ (solo los clientes de sus jornadas activas; puede cobrar abonos a cuenta) | — |
 | route_activity | — | ✓ (sus paradas de hoy) | — | — |
 | recent_orders | ✓ (todos) | ✓ (sus clientes) | — | — |
 | delivery_runs | ✓ (todas las abiertas) | — | ✓ (solo las suyas) | según permisos |
