@@ -14,34 +14,115 @@
         $planningWarehouse = $warehouses->firstWhere('id', $selectedWarehouseId);
     @endphp
 
+    @php
+        $groups = [
+            'Por preparar' => [\App\DeliveryRunStatus::Draft, \App\DeliveryRunStatus::Preparing],
+            'Listas para salir' => [\App\DeliveryRunStatus::Loaded],
+            'En ruta' => [\App\DeliveryRunStatus::InTransit],
+            'Por liquidar' => [\App\DeliveryRunStatus::AwaitingSettlement],
+        ];
+        $nextStep = fn ($run): array => match ($run->status) {
+            \App\DeliveryRunStatus::Draft => ['Asignar pedidos', ''],
+            \App\DeliveryRunStatus::Preparing => ['Preparar carga', ''],
+            \App\DeliveryRunStatus::Loaded => ['Iniciar ruta', ''],
+            \App\DeliveryRunStatus::InTransit => ['Ver avance', ''],
+            \App\DeliveryRunStatus::AwaitingSettlement => ['Liquidar', '#settlement'],
+            default => ['Abrir', ''],
+        };
+        $planningOpen = request()->hasAny(['warehouse_id', 'sales_route_id', 'planning_date', 'orders_page', 'consolidated_page']);
+        $cardColors = ['Por preparar' => 'border-amber-200 bg-amber-50 text-amber-800', 'En ruta' => 'border-indigo-200 bg-indigo-50 text-indigo-800', 'Por liquidar' => 'border-violet-200 bg-violet-50 text-violet-800'];
+    @endphp
+
     <div class="space-y-6">
         <nav class="flex flex-wrap gap-2 text-sm">
-            <a class="btn-secondary border-leaf-600 text-leaf-700" href="{{ route('delivery-runs.index') }}">Jornadas</a>
+            <a class="btn-secondary {{ $history ? '' : 'border-leaf-600 text-leaf-700' }}" href="{{ route('delivery-runs.index') }}">Jornadas activas</a>
+            <a class="btn-secondary {{ $history ? 'border-leaf-600 text-leaf-700' : '' }}" href="{{ route('delivery-runs.index', ['historial' => 1]) }}">Historial</a>
             @can('manage-vehicles')<a class="btn-secondary" href="{{ route('vehicles.index') }}">Vehículos</a>@endcan
         </nav>
 
-        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            @can('manage-deliveries')
-                <a class="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm transition hover:-translate-y-0.5" href="#pending-orders"><p class="text-sm font-bold text-red-800">Pedidos sin asignar</p><p class="mt-2 text-4xl font-black text-red-700">{{ number_format($metrics['pending_orders']) }}</p><p class="mt-1 text-xs text-red-800">{{ $currency }} {{ number_format((float) $metrics['pending_total'], 2) }} por despachar</p></a>
-            @endcan
-            <article class="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm"><p class="text-sm font-bold text-amber-800">En preparación</p><p class="mt-2 text-4xl font-black text-amber-700">{{ number_format($metrics['preparing']) }}</p><p class="mt-1 text-xs text-amber-800">Bodega trabajando</p></article>
-            <article class="rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm"><p class="text-sm font-bold text-sky-800">Listas para salir</p><p class="mt-2 text-4xl font-black text-sky-700">{{ number_format($metrics['loaded']) }}</p><p class="mt-1 text-xs text-sky-800">Esperando iniciar ruta</p></article>
-            <article class="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm"><p class="text-sm font-bold text-indigo-800">En ruta</p><p class="mt-2 text-4xl font-black text-indigo-700">{{ number_format($metrics['in_transit']) }}</p><p class="mt-1 text-xs text-indigo-800">Mercancía en tránsito</p></article>
-            <article class="rounded-2xl border border-violet-200 bg-violet-50 p-5 shadow-sm"><p class="text-sm font-bold text-violet-800">Por liquidar</p><p class="mt-2 text-4xl font-black text-violet-700">{{ number_format($metrics['awaiting_settlement']) }}</p><p class="mt-1 text-xs text-violet-800">Cobros por revisar</p></article>
-            <article class="card p-5"><p class="text-sm font-bold text-ink-600">Programadas hoy</p><p class="mt-2 text-4xl font-black text-ink-950">{{ number_format($metrics['today']) }}</p><p class="mt-1 text-xs text-ink-600">{{ number_format($metrics['open']) }} operaciones abiertas</p></article>
-        </section>
+        @if($settledRun)
+            {{-- A block, not inline php(): an inline one before a later php block breaks Blade. --}}
+            @php
+                $difference = (string) $settledRun->cash_difference;
+                $balanced = bccomp($difference, '0', 4) === 0;
+            @endphp
+            <section class="rounded-2xl border {{ $balanced ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50' }} p-5" role="status">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p class="font-black text-ink-950">{{ $settledRun->run_number }} liquidada</p>
+                        @if($balanced)
+                            <p class="text-sm text-ink-800">Efectivo cuadrado: {{ $currency }} {{ number_format((float) $settledRun->cash_declared, 2) }}.</p>
+                        @else
+                            <p class="text-sm text-ink-800">Diferencia de efectivo: {{ $currency }} {{ number_format((float) $difference, 2) }} ({{ bccomp($difference, '0', 4) < 0 ? 'faltante' : 'sobrante' }}).</p>
+                        @endif
+                    </div>
+                    <a class="btn-secondary" href="{{ route('delivery-runs.show', $settledRun) }}">Ver detalle</a>
+                </div>
+            </section>
+        @endif
 
-        @can('manage-deliveries')
-            <section class="card overflow-hidden" id="pending-orders">
-            <header class="border-b border-stone-100 bg-ink-950 px-5 py-5 text-white sm:px-7">
-                <div class="flex flex-wrap items-end justify-between gap-4"><div><p class="text-xs font-bold tracking-[0.14em] text-mint-100 uppercase">Plan de despacho</p><h2 class="mt-1 text-xl font-black">Pedidos pendientes y consolidado</h2><p class="mt-1 text-sm text-stone-300">Filtra la carga que quieres preparar; ambos paneles usan exactamente los mismos pedidos.</p></div><span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">{{ $planningWarehouse?->name ?: 'Sin bodega' }}</span></div>
-                <form method="GET" action="{{ route('delivery-runs.index') }}#pending-orders" class="mt-5 grid gap-3 md:grid-cols-4">
+        @if($history)
+            <section class="card p-5">
+                <form method="GET" action="{{ route('delivery-runs.index') }}" class="grid gap-4 lg:grid-cols-[minmax(14rem,1.4fr)_12rem_10rem_10rem_auto]">
+                    <input type="hidden" name="historial" value="1">
+                    <div><label class="form-label" for="search">Buscar</label><input class="form-input" id="search" name="search" value="{{ $search }}" placeholder="Jornada, repartidor, cliente o pedido"></div>
+                    <div><label class="form-label" for="status">Estado</label><select class="form-input" id="status" name="status"><option value="">Todos</option>@foreach($statuses as $status)<option value="{{ $status->value }}" @selected($selectedStatus === $status->value)>{{ $status->label() }}</option>@endforeach</select></div>
+                    <div><label class="form-label" for="date_from">Desde</label><input class="form-input" id="date_from" name="date_from" type="date" value="{{ $dateFrom }}"></div>
+                    <div><label class="form-label" for="date_to">Hasta</label><input class="form-input" id="date_to" name="date_to" type="date" value="{{ $dateTo }}"></div>
+                    <div class="flex items-end gap-2"><button class="btn-primary flex-1">Buscar</button><a class="btn-secondary" href="{{ route('delivery-runs.index', ['historial' => 1]) }}">Limpiar</a></div>
+                </form>
+            </section>
+
+            <section class="card overflow-hidden">
+                <div class="border-b border-stone-100 px-5 py-4"><h2 class="font-bold text-ink-950">Historial de jornadas</h2><p class="text-sm text-ink-600">Jornadas liquidadas y canceladas.</p></div>
+                @if($deliveryRuns->isEmpty())
+                    <div class="p-6"><x-empty-state title="Sin jornadas" description="No hay jornadas cerradas con estos filtros." /></div>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[860px]">
+                            <thead class="bg-stone-50"><tr><th class="table-heading">Jornada</th><th class="table-heading">Fecha</th><th class="table-heading">Repartidor</th><th class="table-heading text-right">Entregado</th><th class="table-heading text-right">Diferencia</th><th class="table-heading">Estado</th><th class="table-heading text-right">Acción</th></tr></thead>
+                            <tbody>
+                                @foreach($deliveryRuns as $run)
+                                    <tr>
+                                        <td class="table-cell"><p class="font-bold text-ink-950">{{ $run->run_number }}</p><p class="text-xs text-ink-600">{{ $run->run_orders_count }} pedidos</p></td>
+                                        <td class="table-cell font-semibold text-ink-950">{{ $run->scheduled_date->format('d/m/Y') }}</td>
+                                        <td class="table-cell font-semibold text-ink-950">{{ $run->driver_name }}</td>
+                                        <td class="table-cell text-right"><p class="font-black text-ink-950">{{ $currency }} {{ number_format((float) $run->delivered_total, 2) }}</p><p class="text-xs text-ink-600">Crédito {{ $currency }} {{ number_format((float) $run->credit_total, 2) }}</p></td>
+                                        <td class="table-cell text-right font-bold {{ bccomp((string) $run->cash_difference, '0', 4) === 0 ? 'text-ink-600' : 'text-red-700' }}">{{ $run->status === \App\DeliveryRunStatus::Settled ? $currency.' '.number_format((float) $run->cash_difference, 2) : '—' }}</td>
+                                        <td class="table-cell"><x-delivery-run-status-badge :status="$run->status" /></td>
+                                        <td class="table-cell text-right"><a class="btn-secondary" href="{{ route('delivery-runs.show', $run) }}">Abrir</a></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="border-t border-stone-100 px-5 py-4">{{ $deliveryRuns->links() }}</div>
+                @endif
+            </section>
+        @else
+            <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                @can('manage-deliveries')
+                    <a class="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm transition hover:-translate-y-0.5" href="{{ route('delivery-runs.index', ['warehouse_id' => $selectedWarehouseId]) }}#pending-orders"><p class="text-sm font-bold text-red-800">Pedidos sin asignar</p><p class="mt-2 text-4xl font-black text-red-700">{{ number_format($metrics['pending_orders']) }}</p><p class="mt-1 text-xs text-red-800">{{ $currency }} {{ number_format((float) $metrics['pending_total'], 2) }} por despachar</p></a>
+                @endcan
+                @foreach($cardColors as $label => $classes)
+                    <a class="rounded-2xl border p-5 shadow-sm {{ $classes }}" href="#{{ \Illuminate\Support\Str::slug($label) }}"><p class="text-sm font-bold">{{ $label }}</p><p class="mt-2 text-4xl font-black">{{ number_format($deliveryRuns->filter(fn ($run) => in_array($run->status, $groups[$label], true))->count()) }}</p></a>
+                @endforeach
+            </section>
+
+            @can('manage-deliveries')
+                <details class="card overflow-hidden group" id="pending-orders" @if($planningOpen) open @endif>
+                    <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 bg-ink-950 px-5 py-4 text-white sm:px-7">
+                        <span><span class="block text-xs font-bold tracking-[0.14em] text-mint-100 uppercase">Plan de despacho</span><span class="text-lg font-black">Pedidos pendientes ({{ $metrics['pending_orders'] }}) y consolidado</span></span>
+                        <span class="flex items-center gap-2 text-sm font-bold">{{ $planningWarehouse?->name ?: 'Sin bodega' }}<span class="transition group-open:rotate-180">⌄</span></span>
+                    </summary>
+                    <div class="border-b border-stone-100 bg-ink-950 px-5 pb-5 sm:px-7">
+                <form method="GET" action="{{ route('delivery-runs.index') }}#pending-orders" class="grid gap-3 md:grid-cols-4">
                     <div><label class="mb-1 block text-xs font-bold text-stone-200" for="warehouse_id">Bodega</label><select class="form-input" id="warehouse_id" name="warehouse_id">@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($selectedWarehouseId === $warehouse->id)>{{ $warehouse->name }}</option>@endforeach</select></div>
                     <div><label class="mb-1 block text-xs font-bold text-stone-200" for="sales_route_id">Ruta</label><select class="form-input" id="sales_route_id" name="sales_route_id"><option value="">Todas las rutas</option>@foreach($salesRoutes as $route)<option value="{{ $route->id }}" @selected($selectedRouteId === $route->id)>{{ $route->name }} · {{ $route->code }}</option>@endforeach</select></div>
                     <div><label class="mb-1 block text-xs font-bold text-stone-200" for="planning_date">Entrega solicitada</label><input class="form-input" id="planning_date" name="planning_date" type="date" value="{{ $planningDate }}"></div>
                     <div class="flex items-end gap-2"><button class="btn-primary flex-1">Actualizar plan</button><a class="btn-secondary" href="{{ route('delivery-runs.index') }}#pending-orders">Limpiar</a></div>
                 </form>
-            </header>
+            </div>
 
             <div class="grid xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                 <section class="border-b border-stone-200 xl:border-r xl:border-b-0">
@@ -77,44 +158,35 @@
                     <div class="border-t border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><strong>Control seguro:</strong> este consolidado sirve para planificar y preparar. El descuento real ocurre una sola vez al confirmar la carga de una jornada.</div>
                 </section>
             </div>
-            </section>
-        @endcan
+                </details>
+            @endcan
 
-        <section class="card p-5">
-            <form method="GET" action="{{ route('delivery-runs.index') }}" class="grid gap-4 lg:grid-cols-[minmax(14rem,1.4fr)_12rem_10rem_10rem_auto]">
-                <div><label class="form-label" for="search">Buscar</label><input class="form-input" id="search" name="search" value="{{ $search }}" placeholder="Jornada, repartidor, cliente o pedido"></div>
-                <div><label class="form-label" for="status">Estado</label><select class="form-input" id="status" name="status"><option value="">Todos</option>@foreach($statuses as $status)<option value="{{ $status->value }}" @selected($selectedStatus === $status->value)>{{ $status->label() }}</option>@endforeach</select></div>
-                <div><label class="form-label" for="date_from">Desde</label><input class="form-input" id="date_from" name="date_from" type="date" value="{{ $dateFrom }}"></div>
-                <div><label class="form-label" for="date_to">Hasta</label><input class="form-input" id="date_to" name="date_to" type="date" value="{{ $dateTo }}"></div>
-                <div class="flex items-end gap-2"><button class="btn-primary flex-1">Filtrar</button><a class="btn-secondary" href="{{ route('delivery-runs.index') }}">Limpiar</a></div>
-            </form>
-        </section>
-
-        <section class="card overflow-hidden">
-            <div class="border-b border-stone-100 px-5 py-4"><h2 class="font-bold text-ink-950">Jornadas de reparto</h2><p class="text-sm text-ink-600">Cada jornada conserva su carga, resultados, cobros y cierre.</p></div>
             @if($deliveryRuns->isEmpty())
-                <div class="p-6"><x-empty-state title="Sin jornadas" description="Crea una jornada y asigna pedidos confirmados para comenzar el despacho." /></div>
-            @else
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[980px]">
-                        <thead class="bg-stone-50"><tr><th class="table-heading">Jornada</th><th class="table-heading">Fecha</th><th class="table-heading">Repartidor y vehículo</th><th class="table-heading text-right">Pedidos</th><th class="table-heading text-right">Entregado</th><th class="table-heading">Estado</th><th class="table-heading text-right">Acción</th></tr></thead>
-                        <tbody>
-                            @foreach($deliveryRuns as $run)
-                                <tr>
-                                    <td class="table-cell"><p class="font-bold text-ink-950">{{ $run->run_number }}</p><p class="text-xs text-ink-600">{{ $run->warehouse_name }}</p></td>
-                                    <td class="table-cell"><p class="font-semibold text-ink-950">{{ $run->scheduled_date->format('d/m/Y') }}</p><p class="text-xs text-ink-600">Creada {{ $run->created_at->format('d/m/Y H:i') }}</p></td>
-                                    <td class="table-cell"><p class="font-semibold text-ink-950">{{ $run->driver_name }}</p><p class="text-xs text-ink-600">{{ $run->vehicle_license_plate ?: ($run->vehicle_code ?: 'Sin vehículo asignado') }}</p></td>
-                                    <td class="table-cell text-right font-bold text-ink-950">{{ $run->run_orders_count }}</td>
-                                    <td class="table-cell text-right"><p class="font-black text-ink-950">{{ $currency }} {{ number_format((float) $run->delivered_total, 2) }}</p><p class="text-xs text-ink-600">Saldo {{ $currency }} {{ number_format((float) $run->credit_total, 2) }}</p></td>
-                                    <td class="table-cell"><x-delivery-run-status-badge :status="$run->status" /></td>
-                                    <td class="table-cell text-right"><a class="btn-secondary" href="{{ route('delivery-runs.show', $run) }}">Abrir</a></td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-                <div class="border-t border-stone-100 px-5 py-4">{{ $deliveryRuns->links() }}</div>
+                <div class="card p-6"><x-empty-state title="Sin jornadas activas" description="Crea una jornada y asigna pedidos confirmados para comenzar el despacho." /></div>
             @endif
-        </section>
+            @foreach($groups as $label => $groupStatuses)
+                @php($groupRuns = $deliveryRuns->filter(fn ($run) => in_array($run->status, $groupStatuses, true)))
+                @if($groupRuns->isNotEmpty())
+                    <section class="space-y-3" id="{{ \Illuminate\Support\Str::slug($label) }}">
+                        <h2 class="text-lg font-black text-ink-950">{{ $label }} <span class="text-ink-600">({{ $groupRuns->count() }})</span></h2>
+                        @foreach($groupRuns as $run)
+                            @php([$stepLabel, $stepAnchor] = $nextStep($run))
+                            @php($stale = $run->status === \App\DeliveryRunStatus::InTransit && $run->departed_at?->lt(now()->subDay()))
+                            <article class="card flex flex-wrap items-center justify-between gap-4 p-4 {{ $stale ? 'border-amber-300' : '' }}">
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2"><p class="font-black text-ink-950">{{ $run->run_number }}</p><x-delivery-run-status-badge :status="$run->status" /></div>
+                                    <p class="text-sm text-ink-600">{{ $run->scheduled_date->format('d/m/Y') }} · {{ $run->driver_name }} · {{ $run->vehicle_license_plate ?: ($run->vehicle_code ?: 'Sin vehículo') }} · {{ $run->run_orders_count }} pedidos</p>
+                                    @if($stale)<p class="mt-1 text-sm font-bold text-amber-800">En ruta desde {{ $run->departed_at->format('d/m H:i') }} ({{ $run->departed_at->diffForHumans() }}). Revisa si ya debió cerrar.</p>@endif
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    @if(bccomp((string) $run->delivered_total, '0', 4) > 0)<p class="text-right"><span class="block font-black text-ink-950">{{ $currency }} {{ number_format((float) $run->delivered_total, 2) }}</span><span class="text-xs text-ink-600">entregado</span></p>@endif
+                                    <a class="{{ $run->status === \App\DeliveryRunStatus::AwaitingSettlement ? 'btn-primary' : 'btn-secondary' }}" href="{{ route('delivery-runs.show', $run) }}{{ $stepAnchor }}">{{ $stepLabel }}</a>
+                                </div>
+                            </article>
+                        @endforeach
+                    </section>
+                @endif
+            @endforeach
+        @endif
     </div>
 @endsection

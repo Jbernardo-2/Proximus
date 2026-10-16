@@ -338,7 +338,13 @@ class DeliveryOperationsTest extends TestCase
         $this->actingAs($supervisor)->post(route('delivery-runs.settle', $run), [
             'cash_declared' => '40',
             'settlement_notes' => null,
-        ])->assertRedirect(route('delivery-runs.show', $run));
+        ])->assertRedirect(route('delivery-runs.index'));
+
+        $this->actingAs($supervisor)->get(route('delivery-runs.index'))
+            ->assertSee($run->run_number.' liquidada')
+            ->assertSee('Efectivo cuadrado');
+        $this->assertFalse($this->actingAs($supervisor)->get(route('delivery-runs.index'))->viewData('deliveryRuns')->contains('id', $run->id));
+        $this->assertTrue($this->actingAs($supervisor)->get(route('delivery-runs.index', ['historial' => 1]))->viewData('deliveryRuns')->contains('id', $run->id));
 
         $this->assertSame(DeliveryRunStatus::Settled, $run->refresh()->status);
         $this->assertSame('0.0000', $run->cash_difference);
@@ -744,7 +750,7 @@ class DeliveryOperationsTest extends TestCase
 
         $this->actingAs($supervisor)->get(route('delivery-runs.show', $run))
             ->assertOk()
-            ->assertSee('Saldos pendientes sin acuerdo registrado')
+            ->assertSee('Saldos de contado sin acuerdo registrado')
             ->assertSee('name="credit_reasons['.$runOrder->id.']"', false)
             ->assertSee('data-app-dialog', false);
 
@@ -754,7 +760,7 @@ class DeliveryOperationsTest extends TestCase
             'credit_reasons' => [
                 $runOrder->id => 'El cliente completará el saldo en su próxima visita.',
             ],
-        ])->assertRedirect(route('delivery-runs.show', $run));
+        ])->assertRedirect(route('delivery-runs.index'));
 
         $this->assertSame(DeliveryRunStatus::Settled, $run->refresh()->status);
         $this->assertSame(

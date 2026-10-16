@@ -21,6 +21,7 @@ use App\OrderStatus;
 use App\PaymentTerm;
 use App\Services\DeliveryInvoiceService;
 use App\Services\DeliveryLoadShortages;
+use App\Services\DeliveryRunAccountPayments;
 use App\SettlementMethod;
 use App\UserRole;
 use DateTimeImmutable;
@@ -48,6 +49,9 @@ class DeliveryRunController extends Controller
         $routeId = $request->string('sales_route_id')->toString();
         $planningDate = $request->string('planning_date')->toString();
         $baseQuery = DeliveryRun::query()->visibleTo($user);
+        $history = $request->boolean('historial');
+        $closedStatuses = [DeliveryRunStatus::Settled->value, DeliveryRunStatus::Cancelled->value];
+        $openStatuses = collect(DeliveryRunStatus::cases())->filter->isOpen()->map->value->values()->all();
         $pendingOrderBase = Order::query()
             ->where('status', OrderStatus::Confirmed)
             ->when($warehouseId !== '', fn ($query) => $query->where('warehouse_id', $warehouseId))
@@ -103,27 +107,24 @@ class DeliveryRunController extends Controller
                             ->where('order_number', 'like', "%{$search}%")
                             ->orWhere('customer_name', 'like', "%{$search}%"));
                 }))
-                ->when(DeliveryRunStatus::tryFrom($status) !== null, fn ($query) => $query->where('status', $status))
+                // The board shows the open runs; settled and cancelled ones live in the history.
+                ->whereIn('status', $history ? $closedStatuses : $openStatuses)
+                ->when(in_array($status, $history ? $closedStatuses : $openStatuses, true), fn ($query) => $query->where('status', $status))
                 ->when($this->isDate($dateFrom), fn ($query) => $query->whereDate('scheduled_date', '>=', $dateFrom))
                 ->when($this->isDate($dateTo), fn ($query) => $query->whereDate('scheduled_date', '<=', $dateTo))
                 ->orderByDesc('scheduled_date')
                 ->orderByDesc('created_at')
                 ->orderByDesc('id')
-                ->paginate(20, ['*'], 'runs_page')
+                ->paginate($history ? 20 : 100, ['*'], 'runs_page')
                 ->withQueryString(),
+            'history' => $history,
+            'settledRun' => DeliveryRun::query()->find($request->session()->get('settled_run_id')),
             'metrics' => [
-                'today' => (clone $baseQuery)->whereDate('scheduled_date', today())->count(),
+
                 'pending_orders' => (clone $pendingOrderBase)->count(),
                 'pending_total' => (string) (clone $pendingOrderBase)->sum('total'),
-                'preparing' => (clone $baseQuery)->where('status', DeliveryRunStatus::Preparing)->count(),
-                'loaded' => (clone $baseQuery)->where('status', DeliveryRunStatus::Loaded)->count(),
-                'in_transit' => (clone $baseQuery)->where('status', DeliveryRunStatus::InTransit)->count(),
-                'awaiting_settlement' => (clone $baseQuery)->where('status', DeliveryRunStatus::AwaitingSettlement)->count(),
-                'open' => (clone $baseQuery)->whereIn('status', collect(DeliveryRunStatus::cases())
-                    ->filter(fn (DeliveryRunStatus $runStatus): bool => $runStatus->isOpen())
-                    ->map->value)->count(),
             ],
-            'statuses' => DeliveryRunStatus::cases(),
+            'statuses' => array_map(DeliveryRunStatus::from(...), $history ? $closedStatuses : $openStatuses),
             'search' => $search,
             'selectedStatus' => $status,
             'dateFrom' => $dateFrom,
@@ -163,7 +164,7 @@ class DeliveryRunController extends Controller
             ->with('success', 'Jornada creada. Ahora asigna los pedidos confirmados.');
     }
 
-    public function show(Request $request, DeliveryRun $deliveryRun, DeliveryInvoiceService $invoiceService, DeliveryLoadShortages $shortages): View
+    public function show(Request $request, DeliveryRun $deliveryRun, DeliveryInvoiceService $invoiceService, DeliveryLoadShortages $shortages, DeliveryRunAccountPayments $accountPayments): View
     {
         Gate::authorize('view', $deliveryRun);
         /** @var User $user */
@@ -241,9 +242,35 @@ class DeliveryRunController extends Controller
             ->values();
         $invoicedRunOrder = $deliveryRun->runOrders
             ->firstWhere('id', $request->session()->get('delivery_invoice_run_order_id'));
+        // Cash the driver must hand over: deliveries plus the old debts collected on the
+        // way. Stored totals are frozen at settlement; before that, account payments are live.
+        $accountPaymentEntries = $accountPayments->for($deliveryRun);
+        $accountPaymentMethods = $accountPayments->byMethod($accountPaymentEntries);
+        $deliveryCash = bcsub((string) $deliveryRun->cash_expected, (string) $deliveryRun->account_payment_cash, 4);
+        $accountPaymentCash = $deliveryRun->status === DeliveryRunStatus::Settled
+            ? (string) $deliveryRun->account_payment_cash
+            : bcadd($accountPaymentMethods['cash'] ?? '0', '0', 4);
+        $returns = $allItems
+            ->groupBy(fn ($item): string => $item->product_id.'|'.$item->presentation_name)
+            ->map(fn ($items): array => [
+                'product_name' => $items->first()->product_name,
+                'presentation_name' => $items->first()->presentation_name,
+                'returned' => $items->reduce(fn (string $sum, $item): string => bcadd($sum, (string) $item->returned_quantity, 6), '0'),
+                'damaged' => $items->reduce(fn (string $sum, $item): string => bcadd($sum, (string) $item->damaged_quantity, 6), '0'),
+                'missing' => $items->reduce(fn (string $sum, $item): string => bcadd($sum, (string) $item->missing_quantity, 6), '0'),
+            ])
+            ->filter(fn (array $row): bool => bccomp(bcadd(bcadd($row['returned'], $row['damaged'], 6), $row['missing'], 6), '0', 6) > 0)
+            ->sortBy('product_name')
+            ->values();
 
         return view('deliveries.show', [
             'deliveryRun' => $deliveryRun,
+            'accountPaymentEntries' => $accountPaymentEntries,
+            'accountPaymentMethods' => $accountPaymentMethods,
+            'deliveryCash' => $deliveryCash,
+            'accountPaymentCash' => $accountPaymentCash,
+            'cashToReceive' => bcadd($deliveryCash, $accountPaymentCash, 4),
+            'returns' => $returns,
             'invoiceDialog' => $invoicedRunOrder?->settlement === null
                 ? null
                 : $invoiceService->dialogData($invoicedRunOrder),

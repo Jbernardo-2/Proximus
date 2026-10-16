@@ -19,7 +19,8 @@ class SettleDeliveryRunController extends Controller
         $user = $request->user();
         $settleDeliveryRun->handle($deliveryRun, $request->validated(), $user);
 
-        return redirect()->route('delivery-runs.show', $deliveryRun)
-            ->with('success', 'Jornada liquidada. Cobros, saldos y retornos quedaron cerrados.');
+        // Back to the board: the index shows the result with a link to the detail.
+        return redirect()->route('delivery-runs.index')
+            ->with('settled_run_id', $deliveryRun->id);
     }
 }

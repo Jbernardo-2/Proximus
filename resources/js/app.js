@@ -678,6 +678,30 @@ document.querySelectorAll('[data-preparation-form]').forEach((form) => {
     });
 });
 
+document.querySelectorAll('[data-cash-count]').forEach((form) => {
+    const input = form.querySelector('[data-cash-declared]');
+    const output = form.querySelector('[data-cash-difference]');
+    // Cents avoid float drift when comparing what was counted with what was expected.
+    const expected = Math.round(Number(form.dataset.cashExpected || 0) * 100);
+    const money = (cents) => `L ${(cents / 100).toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const update = () => {
+        if (input.value === '') {
+            output.textContent = '';
+
+            return;
+        }
+
+        const difference = Math.round(Number(input.value) * 100) - expected;
+        output.textContent = difference === 0 ? 'Cuadra ✓' : `${difference < 0 ? 'Faltan' : 'Sobran'} ${money(Math.abs(difference))}`;
+        output.classList.toggle('text-emerald-700', difference === 0);
+        output.classList.toggle('text-red-700', difference !== 0);
+    };
+
+    input.addEventListener('input', update);
+    update();
+});
+
 document.querySelectorAll('[data-delivery-quantity]').forEach((input) => {
     input.addEventListener('focus', () => input.select());
     input.addEventListener('mouseup', (event) => event.preventDefault());
