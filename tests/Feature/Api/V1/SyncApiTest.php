@@ -452,6 +452,36 @@ class SyncApiTest extends TestCase
         $this->postJson("/api/v1/delivery-runs/{$run->id}/depart")->assertForbidden();
     }
 
+    public function test_the_phone_departs_and_records_a_stop_not_delivered_in_one_queue(): void
+    {
+        $driver = User::factory()->repartidor()->create();
+        $run = DeliveryRun::factory()->create(['driver_id' => $driver->id, 'status' => DeliveryRunStatus::Loaded]);
+        $order = Order::factory()->create(['status' => OrderStatus::Loaded]);
+        $runOrder = DeliveryRunOrder::factory()->create(['delivery_run_id' => $run->id, 'order_id' => $order->id, 'visit_order' => 1, 'status' => DeliveryOrderStatus::Loaded]);
+        $item = DeliveryRunItem::factory()->create(['delivery_run_order_id' => $runOrder->id, 'requested_quantity' => '3', 'loaded_quantity' => '3', 'unit_price' => '18.0000']);
+        Sanctum::actingAs($driver, $driver->apiAbilities());
+        $location = ['status' => 'unavailable', 'captured_at' => now()->subMinutes(5)->toIso8601String()];
+
+        // Exactly what the app queues when the driver records "no se entregó" before tapping "Salir".
+        $response = $this->postJson('/api/v1/sync/push', ['operations' => [
+            ['client_reference' => 'M004:salida', 'type' => 'delivery.depart', 'payload' => ['delivery_run_id' => $run->id, 'location' => $location]],
+            ['client_reference' => 'M004:entrega', 'type' => 'delivery.outcome', 'payload' => [
+                'delivery_run_id' => $run->id,
+                'run_order_id' => $runOrder->id,
+                'receiver_name' => null,
+                'outcome_reason' => 'business_closed',
+                'outcome_notes' => null,
+                'items' => [['id' => $item->id, 'delivered_quantity' => '0', 'returned_quantity' => '3', 'damaged_quantity' => '0', 'missing_quantity' => '0']],
+                'location' => $location,
+                'outcome_reason_label' => 'Negocio cerrado',
+            ]],
+        ]])->assertOk();
+
+        $this->assertSame(['accepted', 'accepted'], array_column($response->json('results'), 'status'));
+        $this->assertSame(DeliveryOrderStatus::NotDelivered, $runOrder->refresh()->status);
+        $this->assertSame(DeliveryRunStatus::AwaitingSettlement, $run->refresh()->status, 'its only stop is finished');
+    }
+
     public function test_offline_credit_delivery_to_a_customer_over_the_limit_is_kept_as_an_exception(): void
     {
         $driver = User::factory()->repartidor()->create();
