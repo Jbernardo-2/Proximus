@@ -4,10 +4,12 @@ namespace App\Http\Requests;
 
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunOrder;
+use Illuminate\Auth\Access\Response;
+use Illuminate\Support\Facades\Gate;
 
 class UpdateDeliveryOrderPreparationRequest extends DeliveryRequest
 {
-    public function authorize(): bool
+    public function authorize(): bool|Response
     {
         $deliveryRun = $this->route('deliveryRun');
         $runOrder = $this->route('runOrder');
@@ -15,7 +17,8 @@ class UpdateDeliveryOrderPreparationRequest extends DeliveryRequest
         return $deliveryRun instanceof DeliveryRun
             && $runOrder instanceof DeliveryRunOrder
             && $runOrder->delivery_run_id === $deliveryRun->id
-            && ($this->user()?->can('prepare', $deliveryRun) ?? false);
+            ? Gate::forUser($this->user())->inspect('prepare', $deliveryRun)
+            : false;
     }
 
     public function rules(): array

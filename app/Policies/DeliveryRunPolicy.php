@@ -7,6 +7,7 @@ use App\Models\DeliveryRun;
 use App\Models\SalesRoute;
 use App\Models\User;
 use App\UserRole;
+use Illuminate\Auth\Access\Response;
 
 class DeliveryRunPolicy
 {
@@ -71,12 +72,25 @@ class DeliveryRunPolicy
         return $deliveryRun->isDraft() && $user->canPrepareDeliveries();
     }
 
-    public function prepare(User $user, DeliveryRun $deliveryRun): bool
+    public function prepare(User $user, DeliveryRun $deliveryRun): Response
     {
-        return $deliveryRun->isPreparing() && $user->canPrepareDeliveries();
+        if (! $deliveryRun->isPreparing() || ! $user->canPrepareDeliveries()) {
+            return Response::deny();
+        }
+
+        // One warehouse keeper prepares a run; a supervisor may take it over.
+        if ($user->role === UserRole::Bodeguero
+            && $deliveryRun->preparation_started_by !== null
+            && (int) $deliveryRun->preparation_started_by !== $user->id) {
+            $preparer = User::query()->find($deliveryRun->preparation_started_by)?->name ?? 'otro bodeguero';
+
+            return Response::deny("La jornada {$deliveryRun->run_number} la está preparando {$preparer}.");
+        }
+
+        return Response::allow();
     }
 
-    public function load(User $user, DeliveryRun $deliveryRun): bool
+    public function load(User $user, DeliveryRun $deliveryRun): Response
     {
         return $this->prepare($user, $deliveryRun);
     }

@@ -6,6 +6,7 @@ use App\DeliveryOrderStatus;
 use App\DeliveryRunStatus;
 use App\Models\DeliveryRun;
 use App\Models\DeliveryRunOrder;
+use App\Models\InventoryCount;
 use App\Models\Order;
 use App\Models\User;
 use App\Notifications\OperationalNotification;
@@ -82,6 +83,28 @@ class OperationalNotificationService
                 'message' => "{$deliveryRun->run_number} terminó sus paradas y requiere liquidación.",
                 'severity' => 'important',
                 'url' => route('delivery-runs.show', $deliveryRun, false),
+            ]),
+        );
+    }
+
+    /** A count is applied right away; the supervisor hears about every difference. */
+    public function productCountAdjusted(InventoryCount $count, User $actor): void
+    {
+        $item = $count->items->first();
+
+        if ($item === null || bccomp((string) $item->difference, '0', 6) === 0) {
+            return;
+        }
+
+        $difference = rtrim(rtrim((string) $item->difference, '0'), '.');
+        $this->notifyRoles(
+            [UserRole::Admin, UserRole::Supervisor],
+            new OperationalNotification([
+                'type' => 'product_count_adjusted',
+                'title' => 'Ajuste por conteo',
+                'message' => "{$actor->name} contó {$item->product_name} en {$count->warehouse->name}: diferencia de {$difference} {$item->base_unit_symbol}.",
+                'severity' => 'important',
+                'url' => route('inventory-counts.show', $count, false),
             ]),
         );
     }

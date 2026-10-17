@@ -40,7 +40,10 @@ class CreateDeliveryRunAction
                 ]);
             }
 
-            $run = DeliveryRun::query()->create([
+            $run = new DeliveryRun;
+            // A run made on a phone without signal keeps the id the phone gave it.
+            $run->id = $data['id'] ?? $run->newUniqueId();
+            $run->fill([
                 'run_number' => $this->generateNumber->handle('run', 'RUT', $scheduledDate),
                 'client_reference' => $data['client_reference'] ?? null,
                 'warehouse_id' => $warehouse->id,
@@ -55,7 +58,7 @@ class CreateDeliveryRunAction
                 'vehicle_license_plate' => $vehicle?->license_plate,
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $actor->id,
-            ]);
+            ])->save();
             $run->statusHistory()->create([
                 'from_status' => null,
                 'to_status' => DeliveryRunStatus::Draft,

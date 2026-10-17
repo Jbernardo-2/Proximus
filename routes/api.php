@@ -64,6 +64,7 @@ use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use App\Http\Controllers\Api\V1\VoidDeliveryPaymentController;
 use App\Http\Controllers\Api\V1\WarehouseController;
+use App\Http\Controllers\Api\V1\WarehouseFieldController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function (): void {
@@ -304,6 +305,8 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
             Route::put('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'update'])->name('inventory.counts.update');
             Route::post('/inventory/counts/{inventoryCount}/post', PostInventoryCountController::class)->name('inventory.counts.post');
             Route::post('/inventory/counts/{inventoryCount}/cancel', CancelInventoryCountController::class)->name('inventory.counts.cancel');
+            Route::post('/inventory/product-counts', [WarehouseFieldController::class, 'count'])->name('inventory.product-counts.store');
+            Route::post('/inventory/receipts', [WarehouseFieldController::class, 'receipt'])->name('inventory.receipts.store');
         });
 
         Route::middleware(['abilities:inventory:configure', 'can:configure-inventory'])->group(function (): void {

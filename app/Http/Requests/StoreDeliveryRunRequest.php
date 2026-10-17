@@ -26,6 +26,7 @@ class StoreDeliveryRunRequest extends DeliveryRequest
     public function rules(): array
     {
         return [
+            'id' => ['sometimes', 'ulid', Rule::unique('delivery_runs', 'id')],
             'client_reference' => ['nullable', 'string', 'max:100', Rule::unique('delivery_runs', 'client_reference')],
             'warehouse_id' => ['required', 'ulid', Rule::exists('warehouses', 'id')->where('is_active', true)],
             'driver_id' => [

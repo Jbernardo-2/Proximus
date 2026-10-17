@@ -46,6 +46,8 @@ class DeliveryRunResource extends JsonResource
                 'credit_total' => $this->credit_total,
             ],
             'preparation_started_at' => $this->preparation_started_at?->toISOString(),
+            // The phone shows who holds the preparation, since only that keeper may continue it.
+            'preparation_started_by' => $this->preparation_started_by,
             'loaded_at' => $this->loaded_at?->toISOString(),
             'departed_at' => $this->departed_at?->toISOString(),
             'settled_at' => $this->settled_at?->toISOString(),

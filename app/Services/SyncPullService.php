@@ -6,6 +6,7 @@ use App\CustomerReceivableStatus;
 use App\DeliveryRunStatus;
 use App\Http\Resources\Api\V1\CustomerReceivableResource;
 use App\Http\Resources\Api\V1\DeliveryRunResource;
+use App\Http\Resources\Api\V1\WarehouseResource;
 use App\Models\Customer;
 use App\Models\CustomerCreditProfile;
 use App\Models\CustomerReceivable;
@@ -16,7 +17,10 @@ use App\Models\PriceTier;
 use App\Models\Product;
 use App\Models\ProductPresentation;
 use App\Models\SalesRoute;
+use App\Models\Supplier;
 use App\Models\User;
+use App\Models\Vehicle;
+use App\Models\Warehouse;
 use App\OrderStatus;
 use App\PaymentTerm;
 use App\UserRole;
@@ -102,7 +106,64 @@ class SyncPullService
         $onTheStreet = fn (User $user): bool => $takesOrders($user)
             || ($user->role === UserRole::Repartidor && Gate::forUser($user)->allows('execute-deliveries'));
 
+        $assemblesRuns = fn (User $user): bool => Gate::forUser($user)->allows('manage-deliveries');
+        $operatesInventory = fn (User $user): bool => Gate::forUser($user)->allows('operate-inventory');
+
         return [
+            'warehouses' => [
+                'mode' => 'full',
+                'allowed' => $operatesInventory,
+                'query' => fn (): Builder => Warehouse::query()->active(),
+                'map' => fn (Collection $warehouses): array => WarehouseResource::collection($warehouses)->resolve(),
+            ],
+            'suppliers' => [
+                'mode' => 'full',
+                'allowed' => $operatesInventory,
+                'query' => fn (): Builder => Supplier::query()->active(),
+                'map' => fn (Collection $suppliers): array => $suppliers->map(fn (Supplier $supplier): array => ['id' => $supplier->id, 'code' => $supplier->code, 'name' => $supplier->name])->all(),
+            ],
+            'drivers' => [
+                'mode' => 'full',
+                'allowed' => $assemblesRuns,
+                'query' => fn (): Builder => User::query()->where('is_active', true)->where('role', UserRole::Repartidor->value),
+                'map' => fn (Collection $drivers): array => $drivers->map(fn (User $driver): array => ['id' => $driver->id, 'name' => $driver->name])->all(),
+            ],
+            'vehicles' => [
+                'mode' => 'full',
+                'allowed' => $assemblesRuns,
+                'query' => fn (): Builder => Vehicle::query()->active(),
+                'map' => fn (Collection $vehicles): array => $vehicles->map(fn (Vehicle $vehicle): array => ['id' => $vehicle->id, 'code' => $vehicle->code, 'license_plate' => $vehicle->license_plate, 'description' => $vehicle->description])->all(),
+            ],
+            // Confirmed orders waiting for a run: what the warehouse assembles runs from.
+            'dispatch_orders' => [
+                'mode' => 'full',
+                'allowed' => $assemblesRuns,
+                'query' => fn (): Builder => Order::query()
+                    ->where('status', OrderStatus::Confirmed->value)
+                    ->with(['salesRoute:id,code,name', 'items' => fn ($items) => $items->orderBy('created_at')->orderBy('id')]),
+                'map' => fn (Collection $orders): array => $orders->map(fn (Order $order): array => [
+                    'id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'customer_id' => $order->customer_id,
+                    'customer_name' => $order->customer_name,
+                    'warehouse_id' => $order->warehouse_id,
+                    'sales_route_id' => $order->sales_route_id,
+                    'route_name' => $order->salesRoute?->name,
+                    'route_visit_order' => $order->route_visit_order,
+                    'requested_delivery_date' => $order->requested_delivery_date?->toDateString(),
+                    'payment_term' => $order->payment_term->value,
+                    'total' => $order->total,
+                    'items' => $order->items->map(fn ($item): array => [
+                        'id' => $item->id,
+                        'product_id' => $item->product_id,
+                        'product_presentation_id' => $item->product_presentation_id,
+                        'product_name' => $item->product_name,
+                        'presentation_name' => $item->presentation_name,
+                        'quantity' => $item->quantity,
+                        'base_quantity' => $item->base_quantity,
+                    ])->all(),
+                ])->all(),
+            ],
             'products' => [
                 'mode' => 'delta',
                 'allowed' => fn (User $user): bool => $user->is_active,
@@ -269,7 +330,8 @@ class SyncPullService
                 'allowed' => fn (User $user): bool => Gate::forUser($user)->allows('view-deliveries') && $user->role !== UserRole::Preventista,
                 'query' => fn (User $user): Builder => DeliveryRun::query()
                     ->visibleTo($user)
-                    ->whereIn('status', self::ACTIVE_RUN_STATUSES)
+                    // The warehouse also needs the runs it is still assembling and preparing.
+                    ->whereIn('status', $user->role === UserRole::Repartidor ? self::ACTIVE_RUN_STATUSES : [DeliveryRunStatus::Draft, DeliveryRunStatus::Preparing, ...self::ACTIVE_RUN_STATUSES])
                     ->with([
                         'warehouse',
                         'driver',
