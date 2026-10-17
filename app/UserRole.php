@@ -169,7 +169,9 @@ enum UserRole: string
     {
         $abilities = [];
 
-        if ($this->canManageCatalog()) {
+        // On the phone only supervisors and admins manage products; the keeper keeps the
+        // catalog on the web, which goes by the session and not by these token abilities.
+        if ($this->canManageCatalog() && $this !== self::Bodeguero) {
             $abilities[] = 'catalog:manage';
         }
 
