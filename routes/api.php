@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\CancelDeliveryRunController;
 use App\Http\Controllers\Api\V1\CancelInventoryCountController;
 use App\Http\Controllers\Api\V1\CancelInventoryDocumentController;
 use App\Http\Controllers\Api\V1\CancelOrderController;
+use App\Http\Controllers\Api\V1\CatalogFieldController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\CompanyProfileController;
 use App\Http\Controllers\Api\V1\CompleteDeliveryStopController;
@@ -320,6 +321,9 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
         });
 
         Route::middleware(['abilities:catalog:manage', 'can:manage-catalog'])->group(function (): void {
+            Route::post('/products/{product}/photo', [CatalogFieldController::class, 'photo'])->name('products.photo.update');
+            Route::scopeBindings()->put('/products/{product}/presentations/{presentation}/barcode', [CatalogFieldController::class, 'barcode'])
+                ->name('products.presentations.barcode.update');
             Route::apiResource('categories', CategoryController::class);
             Route::apiResource('brands', BrandController::class);
             Route::apiResource('suppliers', SupplierController::class);
