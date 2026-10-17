@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\V1\DeliveryRunController;
 use App\Http\Controllers\Api\V1\DeliveryRunOrderController;
 use App\Http\Controllers\Api\V1\DepartDeliveryRunController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\FieldActivityController;
 use App\Http\Controllers\Api\V1\InventoryCountController;
 use App\Http\Controllers\Api\V1\InventoryDocumentController;
 use App\Http\Controllers\Api\V1\InventoryDocumentItemController;
@@ -90,6 +91,11 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
             Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
             Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
             Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
+        });
+
+        Route::middleware(['abilities:reports:view', 'can:view-reports'])->group(function (): void {
+            Route::get('/field-activity', [FieldActivityController::class, 'index'])->name('field-activity.index');
+            Route::get('/field-activity/salespeople/{user}', [FieldActivityController::class, 'salesperson'])->name('field-activity.salesperson');
         });
 
         Route::middleware(['abilities:reports:view', 'can:access-panel', 'can:view-reports'])->prefix('reports')->name('reports.')->group(function (): void {
