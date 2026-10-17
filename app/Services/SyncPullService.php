@@ -199,6 +199,9 @@ class SyncPullService
                         'brand' => $product->brand?->name,
                         'base_unit' => $product->baseUnit?->symbol,
                         'allows_decimal' => $product->allows_decimal,
+                        // A warehouse receipt asks for the lot and expiry these products need.
+                        'tracks_lots' => $product->tracks_lots,
+                        'tracks_expiration' => $product->tracks_expiration,
                         'is_active' => $product->is_active,
                         'image_url' => $product->image_path ? asset('storage/'.$product->image_path) : null,
                         // The phone keeps the thumbnail on the device; a new version means a new photo.

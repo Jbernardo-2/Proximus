@@ -196,6 +196,30 @@ class WarehouseApiTest extends TestCase
         $this->assertSame('14.000000', InventoryStock::query()->where('product_id', $product->id)->value('quantity_on_hand'));
     }
 
+    public function test_a_receipt_asks_for_the_lot_the_product_tracks_and_only_a_supervisor_adjusts(): void
+    {
+        $warehouse = Warehouse::query()->where('is_default', true)->sole();
+        [$product, $presentation] = $this->product('0');
+        $product->update(['tracks_lots' => true]);
+        $keeper = User::factory()->bodeguero()->create();
+        Sanctum::actingAs($keeper, $keeper->apiAbilities());
+        $receipt = fn (string $type, ?string $lot): array => [
+            'warehouse_id' => $warehouse->id,
+            'type' => $type,
+            'occurred_on' => today()->toDateString(),
+            'items' => [['product_presentation_id' => $presentation->id, 'quantity' => '5', 'lot_number' => $lot]],
+        ];
+
+        $this->travel(5)->seconds();
+        $this->assertTrue(collect($this->getJson('/api/v1/sync/pull/products')->json('records'))->firstWhere('id', $product->id)['tracks_lots']);
+        $this->postJson('/api/v1/inventory/receipts', $receipt('receipt', null))->assertUnprocessable()->assertJsonValidationErrors('lot_number');
+        $this->postJson('/api/v1/inventory/receipts', $receipt('adjustment_in', 'L-1'))->assertForbidden();
+        $this->postJson('/api/v1/inventory/receipts', $receipt('customer_return', 'L-1'))->assertCreated()->assertJsonPath('data.items.0.lot_number', 'L-1');
+
+        $this->assertSame(1, InventoryDocument::query()->count(), 'a refused receipt leaves nothing behind');
+        $this->assertSame('5.000000', InventoryStock::query()->where('product_id', $product->id)->value('quantity_on_hand'));
+    }
+
     /** @param list<Order> $orders */
     private function assembledRun(array $orders, User $keeper): string
     {
