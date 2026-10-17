@@ -118,9 +118,9 @@ Todas las rutas van bajo `/api/v1`. Se envía `Accept: application/json` y, salv
 | receivables | ✓ (todos) | ✓ (solo sus rutas) | ✓ (solo los clientes de sus jornadas activas; puede cobrar abonos a cuenta) | — |
 | route_activity | — | ✓ (sus paradas de hoy) | — | — |
 | recent_orders | ✓ (todos) | ✓ (sus clientes) | — | — |
-| delivery_runs | ✓ (todas las abiertas, incluidas borrador y preparación) | — | ✓ (solo las suyas, desde cargada) | ✓ (como el supervisor) |
-| warehouses, suppliers | ✓ | — | — | ✓ |
-| dispatch_orders, drivers, vehicles | ✓ | — | — | ✓ |
+| delivery_runs | ✓ en línea (`live`, incluidas borrador y preparación) | — | ✓ (solo las suyas, desde cargada; se guardan) | ✓ en línea (`live`) |
+| warehouses, suppliers | ✓ en línea | — | — | ✓ en línea |
+| dispatch_orders, drivers, vehicles | ✓ en línea | — | — | ✓ en línea |
 
 `dispatch_orders` son los pedidos confirmados que esperan jornada, con sus líneas (`items[].id` es la línea del pedido).
 
@@ -153,7 +153,7 @@ El cursor es opaco: guárdalo tal cual, no lo interpretes.
 
 Para forzar una descarga completa (reinstalación o datos dañados), borra el cursor guardado.
 
-### Modo `full` (routes, customers, customer_credit, receivables, route_activity, recent_orders, delivery_runs, warehouses, suppliers, drivers, vehicles, dispatch_orders)
+### Modo `full` (routes, customers, customer_credit, receivables, route_activity, recent_orders, delivery_runs del repartidor)
 
 1. Se pide sin cursor y se recorren todas las páginas igual que en `delta`.
 2. Solo **al terminar todas las páginas**, se reemplaza la tabla local completa por lo recibido. Si la descarga se corta a la mitad, se conserva la tabla anterior.
@@ -409,42 +409,27 @@ Opcional en todas las operaciones. Se captura automáticamente al guardar, sin p
 
 Las líneas de pago y la aplicación a deudas deben sumar exactamente `amount`.
 
-#### Bodega: armar, preparar y cargar una jornada
+#### Bodega y supervisión: siempre en línea
 
-| Operación | Payload |
+El bodeguero y el supervisor **no encolan operaciones**: cada paso va directo a la API y espera la respuesta, para que reservas, existencias y preparador no entren en conflicto. Sin señal, la app no guarda nada y lo dice.
+
+- Leen al momento, con `GET /api/v1/sync/pull/{recurso}` sin guardarlo, los recursos en modo `live`: `delivery_runs` (para ellos), `dispatch_orders`, `drivers`, `vehicles`, `warehouses` y `suppliers`. También leen `stocks` al momento en las pantallas de bodega. El catálogo (`products`) sí se guarda en el teléfono para que el escáner reconozca códigos al instante.
+- La sincronización omite y borra localmente todo recurso `live`.
+
+| Paso | Endpoint |
 |---|---|
-| `delivery.create` | `{ "id": "<ULID del teléfono>", "warehouse_id", "driver_id", "vehicle_id": null, "scheduled_date": "2026-10-16", "notes": null }` |
-| `delivery.assign` | `{ "delivery_run_id", "order_id" }` |
-| `delivery.unassign` | `{ "delivery_run_id", "run_order_id" }` (solo jornadas ya descargadas; si la asignación no se ha enviado, se quita de la cola) |
-| `delivery.prepare_start` | `{ "delivery_run_id" }` |
-| `delivery.prepare` | `{ "delivery_run_id", "items": [ { "order_item_id": "01J…", "prepared_quantity": "6" } ] }` (una línea por cada línea de la jornada; también acepta `id` de la línea de jornada) |
-| `delivery.load` | `{ "delivery_run_id" }` |
-| `delivery.settle` | `{ "delivery_run_id", "cash_declared", "settlement_notes", "credit_reasons": { … } }` (solo supervisor) |
+| Crear jornada | `POST /delivery-runs` |
+| Asignar / quitar pedido | `POST /delivery-runs/{id}/orders` · `DELETE /delivery-runs/{id}/orders/{run_order_id}` |
+| Iniciar preparación | `POST /delivery-runs/{id}/preparation` |
+| Guardar líneas preparadas | `PUT /delivery-runs/{id}/picks` con `items: [{order_item_id, prepared_quantity}]` (solo las líneas que cambian) |
+| Confirmar carga | `POST /delivery-runs/{id}/load` |
+| Liquidar | `POST /delivery-runs/{id}/settle` |
+| Contar un producto | `POST /inventory/product-counts` (`counted_at` opcional; por defecto, la hora del servidor) · `GET /inventory/product-counts` (últimos 50) |
+| Entrada completa | `POST /inventory/receipts` |
 
-- El `id` de `delivery.create` lo genera el teléfono, así las operaciones siguientes de la misma cola ya la referencian. Reenviarla devuelve la jornada existente.
-- Una jornada la prepara **un solo bodeguero**: el que la inició. Otro bodeguero recibe `rejected` con "La jornada … la está preparando …". Un supervisor sí puede continuarla.
-
-#### `inventory.product_count`: conteo de un producto
-
-```json
-{ "warehouse_id": "01J…", "product_id": "01J…", "counted_quantity": "18", "counted_at": "2026-10-16T09:12:00-06:00", "notes": null }
-```
-
-- La diferencia se calcula contra la existencia **a la hora del conteo**: lo que entró o salió después no cuenta como diferencia.
-- Se aplica en el momento (queda como conteo aplicado) y el supervisor recibe una notificación si hubo diferencia.
-- `counted_at` no puede tener más de 30 días ni estar más de 10 minutos en el futuro.
-
-#### `inventory.receipt`: entrada de mercadería completa
-
-```json
-{
-  "warehouse_id": "01J…", "type": "receipt", "supplier_id": null, "occurred_on": "2026-10-16",
-  "external_reference": "FAC-889", "notes": null,
-  "items": [ { "product_presentation_id": "01J…", "quantity": "10", "unit_cost": "12.50", "lot_number": null, "expiration_date": null } ]
-}
-```
-
-Crea el documento con sus líneas y lo aplica de una vez. Los tipos de ajuste necesitan el permiso de ajuste, igual que en la web.
+- `picks` rechaza al momento (422, `errors.stock`) lo que no alcanza en la bodega de la jornada, contando en unidades base solo las líneas ya revisadas (`picked_at`). Un pedido con todas sus líneas revisadas queda preparado; si todas quedaron en cero, sigue pendiente.
+- Una jornada la prepara **un solo bodeguero**: el que la inició. Otro recibe 403 con "La jornada … la está preparando …". Un supervisor sí puede continuarla.
+- Un conteo se compara con la existencia a la hora del conteo, se aplica en el momento y el supervisor recibe una notificación si hubo diferencia.
 
 ---
 

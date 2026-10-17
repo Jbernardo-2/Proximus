@@ -48,6 +48,7 @@ use App\Http\Controllers\Api\V1\ProductSupplierController;
 use App\Http\Controllers\Api\V1\ProductThumbnailController;
 use App\Http\Controllers\Api\V1\ReopenDeliveryStopController;
 use App\Http\Controllers\Api\V1\ReopenOrderController;
+use App\Http\Controllers\Api\V1\RecordDeliveryPicksController;
 use App\Http\Controllers\Api\V1\ReplenishInventoryStockController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RequeueDeliveryOrderController;
@@ -238,6 +239,8 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
                 '/delivery-runs/{deliveryRun}/orders/{runOrder}/preparation',
                 UpdateDeliveryOrderPreparationController::class,
             )->name('delivery-runs.orders.preparation.update');
+            Route::put('/delivery-runs/{deliveryRun}/picks', RecordDeliveryPicksController::class)
+                ->name('delivery-runs.picks.update');
             Route::post('/delivery-runs/{deliveryRun}/load', ConfirmDeliveryLoadController::class)
                 ->name('delivery-runs.load');
         });
@@ -305,6 +308,7 @@ Route::prefix('v1')->name('api.v1.')->middleware('throttle:api')->group(function
             Route::put('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'update'])->name('inventory.counts.update');
             Route::post('/inventory/counts/{inventoryCount}/post', PostInventoryCountController::class)->name('inventory.counts.post');
             Route::post('/inventory/counts/{inventoryCount}/cancel', CancelInventoryCountController::class)->name('inventory.counts.cancel');
+            Route::get('/inventory/product-counts', [WarehouseFieldController::class, 'counts'])->name('inventory.product-counts.index');
             Route::post('/inventory/product-counts', [WarehouseFieldController::class, 'count'])->name('inventory.product-counts.store');
             Route::post('/inventory/receipts', [WarehouseFieldController::class, 'receipt'])->name('inventory.receipts.store');
         });

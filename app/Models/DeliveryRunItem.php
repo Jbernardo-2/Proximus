@@ -44,6 +44,7 @@ class DeliveryRunItem extends Model
             'requested_base_quantity' => 'decimal:6',
             'prepared_quantity' => 'decimal:6',
             'prepared_base_quantity' => 'decimal:6',
+            'picked_at' => 'datetime',
             'loaded_quantity' => 'decimal:6',
             'loaded_base_quantity' => 'decimal:6',
             'delivered_quantity' => 'decimal:6',

@@ -58,6 +58,7 @@ class SaveDeliveryPreparationAction
                 $item->forceFill([
                     'prepared_quantity' => $quantity,
                     'prepared_base_quantity' => bcmul($quantity, (string) $item->conversion_factor, 6),
+                    'picked_at' => now(),
                 ])->save();
             }
 

@@ -12,12 +12,34 @@ use App\Http\Requests\StoreProductCountRequest;
 use App\Http\Resources\Api\V1\InventoryCountResource;
 use App\Http\Resources\Api\V1\InventoryDocumentResource;
 use App\Models\User;
+use App\InventoryCountStatus;
+use App\Models\InventoryCount;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
 
 /** What the warehouse phone records in one request each: a product count and a whole receipt. */
 class WarehouseFieldController extends Controller
 {
+    /** The latest single-product counts: the keeper's own, or everyone's for a supervisor. */
+    public function counts(Request $request): AnonymousResourceCollection
+    {
+        Gate::authorize('viewAny', InventoryCount::class);
+        /** @var User $user */
+        $user = $request->user();
+
+        return InventoryCountResource::collection(InventoryCount::query()
+            ->with(['warehouse', 'items', 'creator'])
+            ->where('status', InventoryCountStatus::Posted->value)
+            ->has('items', '=', 1)
+            ->when(! $user->canAdjustInventory(), fn ($query) => $query->where('created_by', $user->id))
+            ->latest('posted_at')
+            ->limit(50)
+            ->get());
+    }
+
     public function count(StoreProductCountRequest $request, RecordProductCountAction $recordCount): JsonResponse
     {
         /** @var User $user */

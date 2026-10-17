@@ -59,7 +59,7 @@ class SyncPullService
     {
         return collect($this->resources())
             ->map(fn (array $resource, string $name): array => [
-                'mode' => $resource['mode'],
+                'mode' => $this->mode($resource, $user),
                 'available' => $resource['allowed']($user),
             ])
             ->all();
@@ -81,14 +81,14 @@ class SyncPullService
         $definition = $this->resources()[$resource];
         $limit = max(1, min($limit, self::MAXIMUM_LIMIT));
 
-        [$models, $nextCursor] = $definition['mode'] === 'delta'
+        [$models, $nextCursor] = $this->mode($definition, $user) === 'delta'
             ? $this->deltaPage($definition['query']($user), $cursor, $limit)
             : $this->fullPage($definition['query']($user), $cursor, $limit);
         $records = $definition['map']($models, $user);
 
         return [
             'resource' => $resource,
-            'mode' => $definition['mode'],
+            'mode' => $this->mode($definition, $user),
             'records' => $records,
             'next_cursor' => $nextCursor,
             'has_more' => $models->count() === $limit,
@@ -97,7 +97,18 @@ class SyncPullService
     }
 
     /**
-     * @return array<string, array{mode: string, allowed: callable(User): bool, query: callable(User): Builder, map: callable(Collection<int, Model>, User): list<array<string, mixed>>}>
+     * delta and full are kept on the phone; live is read from the server each time a
+     * screen needs it and never stored (the warehouse works online only).
+     *
+     * @param  array{mode: string|callable(User): string}  $resource
+     */
+    private function mode(array $resource, User $user): string
+    {
+        return is_callable($resource['mode']) ? ($resource['mode'])($user) : $resource['mode'];
+    }
+
+    /**
+     * @return array<string, array{mode: string|callable(User): string, allowed: callable(User): bool, query: callable(User): Builder, map: callable(Collection<int, Model>, User): list<array<string, mixed>>}>
      */
     private function resources(): array
     {
@@ -111,32 +122,32 @@ class SyncPullService
 
         return [
             'warehouses' => [
-                'mode' => 'full',
+                'mode' => 'live',
                 'allowed' => $operatesInventory,
                 'query' => fn (): Builder => Warehouse::query()->active(),
                 'map' => fn (Collection $warehouses): array => WarehouseResource::collection($warehouses)->resolve(),
             ],
             'suppliers' => [
-                'mode' => 'full',
+                'mode' => 'live',
                 'allowed' => $operatesInventory,
                 'query' => fn (): Builder => Supplier::query()->active(),
                 'map' => fn (Collection $suppliers): array => $suppliers->map(fn (Supplier $supplier): array => ['id' => $supplier->id, 'code' => $supplier->code, 'name' => $supplier->name])->all(),
             ],
             'drivers' => [
-                'mode' => 'full',
+                'mode' => 'live',
                 'allowed' => $assemblesRuns,
                 'query' => fn (): Builder => User::query()->where('is_active', true)->where('role', UserRole::Repartidor->value),
                 'map' => fn (Collection $drivers): array => $drivers->map(fn (User $driver): array => ['id' => $driver->id, 'name' => $driver->name])->all(),
             ],
             'vehicles' => [
-                'mode' => 'full',
+                'mode' => 'live',
                 'allowed' => $assemblesRuns,
                 'query' => fn (): Builder => Vehicle::query()->active(),
                 'map' => fn (Collection $vehicles): array => $vehicles->map(fn (Vehicle $vehicle): array => ['id' => $vehicle->id, 'code' => $vehicle->code, 'license_plate' => $vehicle->license_plate, 'description' => $vehicle->description])->all(),
             ],
             // Confirmed orders waiting for a run: what the warehouse assembles runs from.
             'dispatch_orders' => [
-                'mode' => 'full',
+                'mode' => 'live',
                 'allowed' => $assemblesRuns,
                 'query' => fn (): Builder => Order::query()
                     ->where('status', OrderStatus::Confirmed->value)
@@ -328,7 +339,8 @@ class SyncPullService
                 'map' => fn (Collection $receivables): array => CustomerReceivableResource::collection($receivables)->resolve(),
             ],
             'delivery_runs' => [
-                'mode' => 'full',
+                // The driver works offline; the warehouse and the supervisor read them live.
+                'mode' => fn (User $user): string => $user->role === UserRole::Repartidor ? 'full' : 'live',
                 'allowed' => fn (User $user): bool => Gate::forUser($user)->allows('view-deliveries') && $user->role !== UserRole::Preventista,
                 'query' => fn (User $user): Builder => DeliveryRun::query()
                     ->visibleTo($user)

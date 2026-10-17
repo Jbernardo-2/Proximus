@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Customer;
-use App\Models\DeliveryRun;
 use App\Models\Device;
 use App\Models\Order;
 use App\Models\SyncOperation;
@@ -30,15 +29,6 @@ class SyncPushService
         'delivery.outcome' => ['PUT', '/api/v1/delivery-runs/{delivery_run_id}/orders/{run_order_id}/outcome'],
         'delivery.payment' => ['POST', '/api/v1/delivery-runs/{delivery_run_id}/orders/{run_order_id}/payments'],
         'customer.payment' => ['POST', '/api/v1/customers/{customer_id}/payments'],
-        'delivery.create' => ['POST', '/api/v1/delivery-runs'],
-        'delivery.assign' => ['POST', '/api/v1/delivery-runs/{delivery_run_id}/orders'],
-        'delivery.unassign' => ['DELETE', '/api/v1/delivery-runs/{delivery_run_id}/orders/{run_order_id}'],
-        'delivery.prepare_start' => ['POST', '/api/v1/delivery-runs/{delivery_run_id}/preparation'],
-        'delivery.prepare' => ['PUT', '/api/v1/delivery-runs/{delivery_run_id}/preparation'],
-        'delivery.load' => ['POST', '/api/v1/delivery-runs/{delivery_run_id}/load'],
-        'delivery.settle' => ['POST', '/api/v1/delivery-runs/{delivery_run_id}/settle'],
-        'inventory.product_count' => ['POST', '/api/v1/inventory/product-counts'],
-        'inventory.receipt' => ['POST', '/api/v1/inventory/receipts'],
     ];
 
     public function __construct(private OfflineSync $offline) {}
@@ -53,10 +43,6 @@ class SyncPushService
                 'order.create', 'visit.no_sale' => Gate::forUser($user)->allows('manage-orders'),
                 'delivery.depart', 'delivery.outcome', 'delivery.payment' => Gate::forUser($user)->allows('execute-deliveries'),
                 'customer.payment' => Gate::forUser($user)->allows('record-customer-payments'),
-                'delivery.create', 'delivery.assign', 'delivery.unassign' => Gate::forUser($user)->allows('manage-deliveries'),
-                'delivery.prepare_start', 'delivery.prepare', 'delivery.load' => Gate::forUser($user)->allows('prepare-deliveries'),
-                'delivery.settle' => Gate::forUser($user)->allows('settle-deliveries'),
-                'inventory.product_count', 'inventory.receipt' => Gate::forUser($user)->allows('operate-inventory'),
             })
             ->values()
             ->all();
@@ -104,8 +90,6 @@ class SyncPushService
             [$status, $body] = [Response::HTTP_UNPROCESSABLE_ENTITY, ['message' => 'Faltan los identificadores que requiere la operación.']];
         } elseif ($operation['type'] === 'customer.create' && is_string($payload['id'] ?? null) && ($customer = Customer::withTrashed()->find($payload['id'])) !== null) {
             [$status, $body] = [Response::HTTP_OK, ['data' => ['id' => $customer->id, 'code' => $customer->code, 'business_name' => $customer->business_name]]];
-        } elseif ($operation['type'] === 'delivery.create' && is_string($payload['id'] ?? null) && ($run = DeliveryRun::query()->find($payload['id'])) !== null) {
-            [$status, $body] = [Response::HTTP_OK, ['data' => ['id' => $run->id, 'run_number' => $run->run_number, 'status' => $run->status->value]]];
         } elseif ($operation['type'] === 'order.create' && ($existing = $this->existingOrder($user, $payload)) !== null) {
             [$status, $body] = [Response::HTTP_OK, ['data' => ['id' => $existing->id, 'order_number' => $existing->order_number, 'status' => $existing->status->value, 'client_reference' => $existing->client_reference]]];
         } else {

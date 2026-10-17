@@ -29,13 +29,13 @@ class RecordProductCountAction
         private OperationalNotificationService $notifications,
     ) {}
 
-    /** @param array{warehouse_id: string, product_id: string, counted_quantity: string, counted_at: string, notes?: ?string} $data */
+    /** @param array{warehouse_id: string, product_id: string, counted_quantity: string, counted_at?: ?string, notes?: ?string} $data */
     public function handle(array $data, User $actor): InventoryCount
     {
         $count = DB::transaction(function () use ($data, $actor): InventoryCount {
             $warehouse = Warehouse::query()->active()->findOrFail($data['warehouse_id']);
             $product = Product::query()->withTrashed()->with('baseUnit')->findOrFail($data['product_id']);
-            $countedAt = CarbonImmutable::parse($data['counted_at']);
+            $countedAt = isset($data['counted_at']) ? CarbonImmutable::parse($data['counted_at']) : CarbonImmutable::now();
 
             if (! $product->allows_decimal && bccomp((string) $data['counted_quantity'], bcadd((string) $data['counted_quantity'], '0', 0), 6) !== 0) {
                 throw ValidationException::withMessages([

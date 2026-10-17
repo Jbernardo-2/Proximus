@@ -24,6 +24,7 @@ class DeliveryRunItemResource extends JsonResource
             'requested_base_quantity' => $this->requested_base_quantity,
             'prepared_quantity' => $this->prepared_quantity,
             'prepared_base_quantity' => $this->prepared_base_quantity,
+            'picked_at' => $this->picked_at?->toISOString(),
             'loaded_quantity' => $this->loaded_quantity,
             'loaded_base_quantity' => $this->loaded_base_quantity,
             'delivered_quantity' => $this->delivered_quantity,
