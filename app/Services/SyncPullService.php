@@ -160,6 +160,8 @@ class SyncPullService
                         'product_name' => $item->product_name,
                         'presentation_name' => $item->presentation_name,
                         'quantity' => $item->quantity,
+                        // The phone checks the stock in base units, as the load does.
+                        'conversion_factor' => $item->conversion_factor,
                         'base_quantity' => $item->base_quantity,
                     ])->all(),
                 ])->all(),

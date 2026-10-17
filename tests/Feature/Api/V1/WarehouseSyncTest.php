@@ -53,7 +53,8 @@ class WarehouseSyncTest extends TestCase
         $this->getJson('/api/v1/sync/pull/dispatch_orders')
             ->assertOk()
             ->assertJsonPath('records.0.id', $order->id)
-            ->assertJsonPath('records.0.items.0.quantity', '6.000000');
+            ->assertJsonPath('records.0.items.0.quantity', '6.000000')
+            ->assertJsonPath('records.0.items.0.conversion_factor', '1.000000');
         $this->assertContains($draft->id, array_column($this->getJson('/api/v1/sync/pull/delivery_runs')->json('records'), 'id'), 'the warehouse sees runs it is still assembling');
 
         $driver = User::factory()->repartidor()->create();
