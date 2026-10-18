@@ -142,6 +142,27 @@ class WarehouseApiTest extends TestCase
         $this->putJson("/api/v1/delivery-runs/{$runId}/picks", $pick)->assertOk();
     }
 
+    public function test_only_a_supervisor_takes_an_order_off_a_run_being_prepared(): void
+    {
+        [, $presentation] = $this->product('50');
+        $first = $this->order([[$presentation, '6']]);
+        $second = $this->order([[$presentation, '2']]);
+        $keeper = User::factory()->bodeguero()->create();
+        $supervisor = User::factory()->supervisor()->create();
+        Sanctum::actingAs($keeper, $keeper->apiAbilities());
+        $runId = $this->assembledRun([$first, $second], $keeper);
+        $runOrder = DeliveryRun::query()->findOrFail($runId)->runOrders()->where('order_id', $second->id)->sole();
+
+        $this->deleteJson("/api/v1/delivery-runs/{$runId}/orders/{$runOrder->id}")->assertForbidden();
+
+        Sanctum::actingAs($supervisor, $supervisor->apiAbilities());
+        $this->deleteJson("/api/v1/delivery-runs/{$runId}/orders/{$runOrder->id}")->assertNoContent();
+
+        $this->assertSame(OrderStatus::Confirmed, $second->refresh()->status, 'back to the orders waiting for a run, reservation kept');
+        $this->assertSame(1, DeliveryRun::query()->findOrFail($runId)->runOrders()->count());
+        $this->assertSame(DeliveryRunStatus::Preparing, DeliveryRun::query()->findOrFail($runId)->status);
+    }
+
     public function test_a_product_count_is_applied_at_the_server_time_and_listed_for_its_keeper(): void
     {
         $warehouse = Warehouse::query()->where('is_default', true)->sole();

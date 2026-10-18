@@ -18,9 +18,10 @@ class RemoveOrderFromDeliveryRunAction
         DB::transaction(function () use ($deliveryRun, $runOrder, $actor): void {
             $lockedRun = DeliveryRun::query()->lockForUpdate()->findOrFail($deliveryRun->id);
 
-            if ($lockedRun->status !== DeliveryRunStatus::Draft) {
+            // Nothing has left the warehouse before the load: the reservation stays with the order.
+            if (! in_array($lockedRun->status, [DeliveryRunStatus::Draft, DeliveryRunStatus::Preparing], true)) {
                 throw ValidationException::withMessages([
-                    'delivery_run' => ['Solo puedes retirar pedidos de una jornada en borrador.'],
+                    'delivery_run' => ['Solo puedes retirar pedidos antes de confirmar la carga.'],
                 ]);
             }
 
@@ -39,7 +40,7 @@ class RemoveOrderFromDeliveryRunAction
                 'from_status' => OrderStatus::Assigned,
                 'to_status' => OrderStatus::Confirmed,
                 'changed_by' => $actor->id,
-                'reason' => "Retirado de la jornada {$lockedRun->run_number} antes de preparar la carga.",
+                'reason' => "Retirado de la jornada {$lockedRun->run_number} antes de cargar el camión.",
             ]);
         });
     }

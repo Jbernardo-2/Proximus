@@ -67,6 +67,13 @@ class DeliveryRunPolicy
         return $this->update($user, $deliveryRun);
     }
 
+    /** While assembling, whoever assembles; while preparing, only a supervisor (the keeper asks for it). */
+    public function removeOrder(User $user, DeliveryRun $deliveryRun): bool
+    {
+        return $this->assignOrders($user, $deliveryRun)
+            || ($deliveryRun->isPreparing() && $user->canSettleDeliveries());
+    }
+
     public function startPreparation(User $user, DeliveryRun $deliveryRun): bool
     {
         return $deliveryRun->isDraft() && $user->canPrepareDeliveries();

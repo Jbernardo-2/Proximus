@@ -35,7 +35,7 @@ class DeliveryRunOrderController extends Controller
         DeliveryRunOrder $runOrder,
         RemoveOrderFromDeliveryRunAction $removeOrder,
     ): RedirectResponse {
-        Gate::authorize('assignOrders', $deliveryRun);
+        Gate::authorize('removeOrder', $deliveryRun);
         abort_unless($runOrder->delivery_run_id === $deliveryRun->id, 404);
         /** @var User $user */
         $user = $request->user();
