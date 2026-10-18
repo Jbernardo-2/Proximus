@@ -89,7 +89,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(DeliveryRun::class, DeliveryRunPolicy::class);
         Gate::policy(Vehicle::class, VehiclePolicy::class);
 
-        Password::defaults(fn (): Password => Password::min(12)
+        // Short enough for anyone to remember; a letter and a number keep it from being a plain word.
+        Password::defaults(fn (): Password => Password::min(8)
             ->max(128)
             ->letters()
             ->numbers());

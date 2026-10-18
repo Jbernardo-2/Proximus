@@ -105,6 +105,97 @@ document.querySelectorAll('[data-password-toggle]').forEach((button) => {
     });
 });
 
+// Editing a user: the password fields stay closed until someone means to change it.
+document.querySelectorAll('[data-password-open]').forEach((button) => {
+    const fields = document.getElementById(button.dataset.passwordOpen);
+
+    button.addEventListener('click', () => {
+        fields.classList.remove('hidden');
+        fields.querySelectorAll('input').forEach((input) => { input.disabled = false; });
+        button.classList.add('hidden');
+        fields.querySelector('input')?.focus();
+    });
+});
+
+// A password easy to say out loud: a word, a dash and four digits (letters and numbers, 8+).
+const passwordWords = ['Mango', 'Lluvia', 'Ceiba', 'Tortuga', 'Volcan', 'Laguna', 'Colibri', 'Pino', 'Arena', 'Coral', 'Nube', 'Jaguar', 'Cacao', 'Sendero', 'Brisa', 'Puma'];
+
+document.querySelectorAll('[data-password-generate]').forEach((button) => {
+    const input = document.getElementById(button.dataset.passwordGenerate);
+
+    button.addEventListener('click', () => {
+        const random = new Uint32Array(2);
+        crypto.getRandomValues(random);
+        input.value = `${passwordWords[random[0] % passwordWords.length]}-${String(random[1] % 10000).padStart(4, '0')}`;
+
+        // Shown, so it can be copied and handed to the user.
+        if (input.type === 'password') {
+            document.querySelector(`[data-password-toggle="${input.id}"]`)?.click();
+        }
+
+        input.dispatchEvent(new Event('input'));
+    });
+});
+
+document.querySelectorAll('[data-password-checklist]').forEach((list) => {
+    const input = document.getElementById(list.dataset.passwordChecklist);
+    const rules = {
+        length: (value) => value.length >= 8,
+        letter: (value) => /\p{L}/u.test(value),
+        number: (value) => /\d/.test(value),
+    };
+    const update = () => {
+        list.querySelectorAll('[data-rule]').forEach((item) => {
+            const met = rules[item.dataset.rule](input.value);
+            item.classList.toggle('text-leaf-700', met);
+            item.classList.toggle('font-semibold', met);
+            item.textContent = `${met ? '✓ ' : ''}${item.textContent.replace(/^✓ /, '')}`;
+        });
+    };
+
+    input.addEventListener('input', update);
+    update();
+});
+
+// Who already has this address, asked as soon as the field is left.
+document.querySelectorAll('[data-email-check]').forEach((input) => {
+    const notice = document.querySelector('[data-email-taken]');
+
+    input.addEventListener('change', async () => {
+        const email = input.value.trim();
+
+        if (email === '') {
+            notice.classList.add('hidden');
+
+            return;
+        }
+
+        const query = new URLSearchParams({ email, ...(input.dataset.emailIgnore ? { ignore: input.dataset.emailIgnore } : {}) });
+
+        try {
+            const response = await fetch(`${input.dataset.emailCheck}?${query}`, { headers: { Accept: 'application/json' } });
+            const result = await response.json();
+
+            notice.replaceChildren();
+
+            if (! result.taken) {
+                notice.classList.add('hidden');
+
+                return;
+            }
+
+            const link = document.createElement('a');
+            link.href = result.url;
+            link.className = 'underline';
+            link.textContent = 'Ver usuario';
+            notice.append(`${result.message} `, link);
+            notice.classList.remove('hidden');
+        } catch {
+            // The server checks it again on save; a failed lookup only skips the early warning.
+        }
+    });
+});
+
 document.querySelectorAll('form[data-confirm]').forEach((form) => {
     let confirmationPending = false;
     let confirmationPassed = false;

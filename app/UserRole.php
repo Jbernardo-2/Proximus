@@ -21,6 +21,18 @@ enum UserRole: string
         };
     }
 
+    /** What the role does, to choose it without doubts. */
+    public function description(): string
+    {
+        return match ($this) {
+            self::Admin => 'Todo el sistema: usuarios, empresa, configuración y reportes.',
+            self::Supervisor => 'Supervisa ventas, reparto y bodega; liquida jornadas, ve el crédito y los reportes.',
+            self::Preventista => 'Visita clientes de su ruta, toma pedidos y cobra abonos desde el teléfono.',
+            self::Bodeguero => 'Prepara y carga jornadas, cuenta existencias y registra entradas de mercadería.',
+            self::Repartidor => 'Entrega pedidos, cobra y entrega el efectivo de su jornada desde el teléfono.',
+        };
+    }
+
     public function canManageCatalog(): bool
     {
         return in_array($this, [self::Admin, self::Supervisor, self::Bodeguero], true);

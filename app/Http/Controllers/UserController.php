@@ -10,12 +10,28 @@ use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
 use App\SecurityEvent;
 use App\UserRole;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class UserController extends Controller
 {
+    /** Tells the form, as the address is typed, whether someone already has it. */
+    public function emailCheck(Request $request): JsonResponse
+    {
+        $owner = User::query()
+            ->where('email', mb_strtolower(trim($request->string('email')->toString())))
+            ->when($request->filled('ignore'), fn ($query) => $query->whereKeyNot($request->integer('ignore')))
+            ->first();
+
+        return response()->json($owner === null ? ['taken' => false] : [
+            'taken' => true,
+            'message' => $owner->emailTakenMessage(),
+            'url' => route('users.edit', $owner),
+        ]);
+    }
+
     public function index(Request $request): View
     {
         $search = $request->string('search')->trim()->toString();

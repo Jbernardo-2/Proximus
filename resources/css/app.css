@@ -63,6 +63,10 @@
         @apply mt-1.5 text-xs leading-5 text-ink-600;
     }
 
+    .form-error {
+        @apply mt-1.5 text-xs font-semibold leading-5 text-red-700;
+    }
+
     .nav-link {
         @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-stone-300 transition hover:bg-white/10 hover:text-white;
     }

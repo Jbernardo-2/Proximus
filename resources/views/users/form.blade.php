@@ -4,6 +4,8 @@
     $editing = $managedUser->exists;
     $editingOwnAccount = $editing && $managedUser->is(auth()->user());
     $selectedRole = old('role', $managedUser->role?->value ?? 'bodeguero');
+    // A new user always gets a password; when editing, it is changed only on purpose.
+    $passwordOpen = ! $editing || $errors->has('password') || filled(old('password'));
 @endphp
 
 @section('title', $editing ? 'Editar usuario' : 'Nuevo usuario')
@@ -26,32 +28,40 @@
         <section class="card p-5 sm:p-7">
             <div class="mb-6">
                 <h2 class="text-lg font-bold text-ink-950">Información de acceso</h2>
-                <p class="mt-1 text-sm text-ink-600">Datos que identifican al usuario al iniciar sesión.</p>
+                <p class="mt-1 text-sm text-ink-600">Con el correo y la contraseña entra a la web y a la app.</p>
             </div>
 
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>
                     <label class="form-label" for="name">Nombre completo *</label>
                     <input class="form-input" id="name" name="name" required maxlength="255" autocomplete="name" value="{{ old('name', $managedUser->name) }}">
+                    @error('name')<p class="form-error">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label class="form-label" for="email">Correo electrónico *</label>
-                    <input class="form-input" id="email" name="email" type="email" required maxlength="255" autocomplete="email" value="{{ old('email', $managedUser->email) }}">
+                    <input class="form-input" id="email" name="email" type="email" required maxlength="255" autocomplete="off" value="{{ old('email', $managedUser->email) }}"
+                           data-email-check="{{ route('users.email-check') }}" @if ($editing) data-email-ignore="{{ $managedUser->getKey() }}" @endif aria-describedby="email-taken">
+                    <p id="email-taken" class="form-error {{ $errors->has('email') ? '' : 'hidden' }}" data-email-taken aria-live="polite">@error('email'){{ $message }}@enderror</p>
                 </div>
-                <div>
-                    <label class="form-label" for="role">Rol *</label>
+                <div class="sm:col-span-2">
+                    <span class="form-label">Rol *</span>
                     @if ($editingOwnAccount)
                         <input type="hidden" name="role" value="{{ $managedUser->role->value }}">
                     @endif
-                    <select class="form-input" id="role" name="role" required @disabled($editingOwnAccount)>
+                    <div class="grid gap-2 sm:grid-cols-2">
                         @foreach ($roles as $role)
-                            <option value="{{ $role->value }}" @selected($selectedRole === $role->value)>{{ $role->label() }}</option>
+                            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-stone-200 p-3 has-[:checked]:border-leaf-600 has-[:checked]:bg-mint-50 {{ $editingOwnAccount ? 'cursor-not-allowed opacity-60' : '' }}">
+                                <input class="mt-1 size-4 text-leaf-700" type="radio" name="role" value="{{ $role->value }}" @checked($selectedRole === $role->value) @disabled($editingOwnAccount) required>
+                                <span>
+                                    <span class="block text-sm font-semibold text-ink-950">{{ $role->label() }}</span>
+                                    <span class="block text-xs text-ink-600">{{ $role->description() }}</span>
+                                </span>
+                            </label>
                         @endforeach
-                    </select>
-                    <p class="form-help">El administrador gestiona usuarios; supervisor y bodeguero administran el catálogo.</p>
+                    </div>
+                    @error('role')<p class="form-error">{{ $message }}</p>@enderror
                 </div>
-                <div>
-                    <span class="form-label">Estado</span>
+                <div class="sm:col-span-2">
                     @if ($editingOwnAccount)
                         <input type="hidden" name="is_active" value="1">
                     @else
@@ -61,7 +71,7 @@
                         <input class="size-4 rounded border-stone-300 text-leaf-700" type="checkbox" name="is_active" value="1" @checked((bool) old('is_active', $editing ? $managedUser->is_active : true)) @disabled($editingOwnAccount)>
                         <span>
                             <span class="block text-sm font-semibold text-ink-950">Usuario activo</span>
-                            <span class="block text-xs text-ink-600">Puede autenticarse según los permisos de su rol.</span>
+                            <span class="block text-xs text-ink-600">Puede entrar según los permisos de su rol.</span>
                         </span>
                     </label>
                 </div>
@@ -69,20 +79,44 @@
         </section>
 
         <section class="card p-5 sm:p-7">
-            <div class="mb-6">
-                <h2 class="text-lg font-bold text-ink-950">{{ $editing ? 'Restablecer contraseña' : 'Contraseña inicial' }}</h2>
-                <p class="mt-1 text-sm text-ink-600">{{ $editing ? 'Déjala en blanco para conservarla. Si la cambias, usa al menos 12 caracteres, con letras y números.' : 'Debe contener al menos 12 caracteres, con letras y números.' }}</p>
+            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-bold text-ink-950">{{ $editing ? 'Contraseña' : 'Contraseña inicial' }}</h2>
+                    <p class="mt-1 text-sm text-ink-600">
+                        {{ $editing ? 'Si la cambias, se cierran sus sesiones en la web y en los teléfonos, y entra con la nueva.' : 'Pásasela al usuario; podrá usarla en la web y en la app.' }}
+                    </p>
+                </div>
+                @if ($editing)
+                    <button type="button" class="btn-secondary {{ $passwordOpen ? 'hidden' : '' }}" data-password-open="password-fields">Cambiar contraseña</button>
+                @endif
             </div>
 
-            <div class="grid gap-5 sm:grid-cols-2">
-                <div>
-                    <label class="form-label" for="password">{{ $editing ? 'Nueva contraseña' : 'Contraseña *' }}</label>
-                    <input class="form-input" id="password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" @required(! $editing)>
+            <div id="password-fields" class="{{ $passwordOpen ? '' : 'hidden' }} max-w-md space-y-2">
+                <label class="form-label" for="password">{{ $editing ? 'Nueva contraseña' : 'Contraseña *' }}</label>
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <input class="form-input pr-11" id="password" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password"
+                               value="{{ old('password') }}" @required(! $editing) @disabled(! $passwordOpen) data-password-rules>
+                        <button type="button" class="absolute right-2 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-lg text-ink-600 transition hover:bg-mint-50 hover:text-leaf-700"
+                                data-password-toggle="password" aria-label="Mostrar contraseña" aria-pressed="false">
+                            <svg data-password-visible-icon class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+                                <circle cx="12" cy="12" r="2.5"></circle>
+                            </svg>
+                            <svg data-password-hidden-icon class="hidden size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                                <path stroke-linecap="round" d="m4 4 16 16"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M10.7 6.1A10 10 0 0 1 12 6c6 0 9.5 6 9.5 6a15 15 0 0 1-2.1 2.7M14 17.8a9.4 9.4 0 0 1-2 .2c-6 0-9.5-6-9.5-6a15 15 0 0 1 3.2-3.7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <button type="button" class="btn-secondary" data-password-generate="password">Generar</button>
                 </div>
-                <div>
-                    <label class="form-label" for="password_confirmation">Confirmar contraseña{{ $editing ? '' : ' *' }}</label>
-                    <input class="form-input" id="password_confirmation" name="password_confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" @required(! $editing)>
-                </div>
+                <ul class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600" data-password-checklist="password">
+                    <li data-rule="length">8 caracteres</li>
+                    <li data-rule="letter">una letra</li>
+                    <li data-rule="number">un número</li>
+                </ul>
+                @error('password')<p class="form-error">{{ $message }}</p>@enderror
             </div>
         </section>
 

@@ -13,7 +13,7 @@ class CreateAdminUser extends Command
     protected $signature = 'app:create-admin
         {--name= : Nombre completo}
         {--email= : Correo electrónico}
-        {--password= : Contraseña de al menos 12 caracteres, con letras y números}';
+        {--password= : Contraseña de al menos 8 caracteres, con letras y números}';
 
     protected $description = 'Crea o actualiza el usuario administrador inicial';
 

@@ -120,20 +120,65 @@ class UserManagementTest extends TestCase
         $this->assertTrue($administrator->refresh()->is_active);
     }
 
-    public function test_weak_password_is_rejected_when_creating_a_user(): void
+    public function test_a_password_needs_eight_characters_with_a_letter_and_a_number_and_is_typed_once(): void
     {
         $administrator = User::factory()->admin()->create();
-
-        $this->actingAs($administrator)->post(route('users.store'), [
-            'name' => 'Usuario inseguro',
-            'email' => 'inseguro@example.com',
+        $user = fn (string $password): array => [
+            'name' => 'Usuario nuevo',
+            'email' => 'nuevo@example.com',
             'role' => UserRole::Bodeguero->value,
             'is_active' => '1',
-            'password' => 'short123',
-            'password_confirmation' => 'short123',
-        ])->assertSessionHasErrors('password');
+            'password' => $password,
+        ];
 
-        $this->assertDatabaseMissing('users', ['email' => 'inseguro@example.com']);
+        foreach (['corta12', 'solotexto', '12345678'] as $weak) {
+            $this->actingAs($administrator)->post(route('users.store'), $user($weak))->assertSessionHasErrors('password');
+        }
+        $this->assertDatabaseMissing('users', ['email' => 'nuevo@example.com']);
+
+        $this->actingAs($administrator)->post(route('users.store'), $user('Mango-4827'))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('users', ['email' => 'nuevo@example.com']);
+    }
+
+    public function test_the_user_form_explains_each_role_and_keeps_the_password_closed_when_editing(): void
+    {
+        $administrator = User::factory()->admin()->create();
+        $seller = User::factory()->preventista()->create();
+
+        $this->actingAs($administrator)->get(route('users.create'))
+            ->assertOk()
+            ->assertSee('data-password-generate="password"', false)
+            ->assertSee(UserRole::Repartidor->description())
+            ->assertDontSee('password_confirmation');
+        $this->actingAs($administrator)->get(route('users.edit', $seller))
+            ->assertOk()
+            ->assertSee('Cambiar contraseña')
+            ->assertSee('id="password-fields" class="hidden', false);
+    }
+
+    public function test_a_taken_email_says_whose_it_is_and_suggests_reactivating_an_inactive_user(): void
+    {
+        $administrator = User::factory()->admin()->create();
+        User::factory()->preventista()->create(['name' => 'Ana López', 'email' => 'ana@example.com']);
+        User::factory()->repartidor()->create(['name' => 'Luis Mejía', 'email' => 'luis@example.com', 'is_active' => false]);
+        $user = fn (string $email): array => ['name' => 'Otro', 'email' => $email, 'role' => UserRole::Bodeguero->value, 'is_active' => '1', 'password' => 'Mango-4827'];
+
+        $this->actingAs($administrator)->post(route('users.store'), $user(' ANA@example.com '))
+            ->assertSessionHasErrors(['email' => 'Ya existe un usuario con este correo: Ana López (Preventista).']);
+        $this->actingAs($administrator)->post(route('users.store'), $user('luis@example.com'))
+            ->assertSessionHasErrors(['email' => 'Este correo es de Luis Mejía (Repartidor), que está desactivado. Reactívalo en lugar de crear otro usuario.']);
+
+        $this->actingAs($administrator)->getJson(route('users.email-check', ['email' => 'Ana@Example.com']))
+            ->assertOk()
+            ->assertJsonPath('taken', true)
+            ->assertJsonPath('message', 'Ya existe un usuario con este correo: Ana López (Preventista).');
+        $this->actingAs($administrator)->getJson(route('users.email-check', ['email' => 'nadie@example.com']))->assertJsonPath('taken', false);
+        $ana = User::query()->where('email', 'ana@example.com')->sole();
+        $this->actingAs($administrator)->getJson(route('users.email-check', ['email' => 'ana@example.com', 'ignore' => $ana->id]))
+            ->assertJsonPath('taken', false, 'editing Ana, her own address is not taken');
+
+        $seller = User::factory()->preventista()->create();
+        $this->actingAs($seller)->getJson(route('users.email-check', ['email' => 'ana@example.com']))->assertForbidden();
     }
 
     public function test_administrator_cannot_remove_own_administrator_role(): void

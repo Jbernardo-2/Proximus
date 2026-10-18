@@ -49,6 +49,14 @@ class User extends Authenticatable
         return $this->hasMany(DeliveryRun::class, 'created_by');
     }
 
+    /** What the admin reads when this user's address is used again. */
+    public function emailTakenMessage(): string
+    {
+        return $this->is_active
+            ? "Ya existe un usuario con este correo: {$this->name} ({$this->role->label()})."
+            : "Este correo es de {$this->name} ({$this->role->label()}), que está desactivado. Reactívalo en lugar de crear otro usuario.";
+    }
+
     public function canAccessPanel(): bool
     {
         return $this->is_active && $this->role->canAccessPanel();

@@ -360,6 +360,7 @@ Route::middleware(['auth', 'can:configure-inventory'])->group(function (): void 
 });
 
 Route::middleware(['auth', 'can:manage-users'])->group(function (): void {
+    Route::get('/users/email-check', [UserController::class, 'emailCheck'])->name('users.email-check');
     Route::resource('users', UserController::class)->except(['show', 'destroy']);
     Route::get('/devices', [DeviceController::class, 'index'])->name('devices.index');
     Route::post('/devices/{device}/revoke', [DeviceController::class, 'revoke'])->name('devices.revoke');
