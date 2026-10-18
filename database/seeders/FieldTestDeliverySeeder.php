@@ -13,6 +13,7 @@ use App\Models\Customer;
 use App\Models\DeliveryRun;
 use App\Models\Product;
 use App\Models\RouteStop;
+use App\Models\SalesRoute;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Warehouse;
@@ -88,6 +89,9 @@ class FieldTestDeliverySeeder extends Seeder
             'notes' => 'Jornada de prueba de campo.',
         ], $admin);
 
+        // The route has no stops on Sunday, so the salesperson is given rather than taken from today's stop.
+        $salesperson = SalesRoute::query()->where('code', FieldTestSeeder::ROUTE_CODE)->value('salesperson_id');
+
         // Stops 1-10: customers CAMPO-01..05 pay cash, 11..15 buy on credit (21 has a small limit).
         $picked = $customers->whereIn('code', ['CAMPO-01', 'CAMPO-02', 'CAMPO-03', 'CAMPO-04', 'CAMPO-05', 'CAMPO-11', 'CAMPO-12', 'CAMPO-13', 'CAMPO-14', 'CAMPO-21'])->values();
 
@@ -104,7 +108,7 @@ class FieldTestDeliverySeeder extends Seeder
             $order = app(CreateCompleteOrderAction::class)->handle([
                 'customer_id' => $customer->id,
                 'route_stop_id' => RouteStop::query()->where('customer_id', $customer->id)->where('visit_day', today()->dayOfWeekIso)->value('id'),
-                'salesperson_id' => $admin->id,
+                'salesperson_id' => $salesperson,
                 'warehouse_id' => $warehouse->id,
                 'order_date' => today()->toDateString(),
                 'requested_delivery_date' => today()->toDateString(),
