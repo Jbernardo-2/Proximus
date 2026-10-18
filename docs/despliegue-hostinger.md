@@ -16,36 +16,38 @@ El sistema necesita PHP 8.3, MySQL, una tarea programada diaria (cron) y nada de
 ## 2. Por SSH
 
 ```bash
-cd ~/domains/larassolutions.es
+cd ~/domains/bodegalopez.larassolutions.es
 
 # Código (si el repositorio es privado, usa un token o una llave de despliegue de GitHub).
-git clone https://github.com/Jbernardo-2/Proximus.git proximus
+git clone git@github.com:Jbernardo-2/Proximus.git proximus   # llave de despliegue en ~/.ssh
 cd proximus
 composer install --no-dev --optimize-autoloader
 
 # Configuración: copia la plantilla de abajo en .env y completa los datos.
 nano .env
-php artisan key:generate
+php artisan key:generate --force
 
 php artisan migrate --force
-php artisan storage:link
+php artisan db:seed --force             # perfil de empresa y unidades de medida
+# storage:link no funciona (Hostinger desactiva exec), el enlace se crea a mano:
+ln -sfn ~/domains/bodegalopez.larassolutions.es/proximus/storage/app/public public/storage
 php artisan app:create-admin          # pide nombre, correo y contraseña
 
 # El subdominio debe servir la carpeta public del proyecto.
-rm -rf ~/domains/larassolutions.es/public_html/bodegalopez
-ln -s ~/domains/larassolutions.es/proximus/public ~/domains/larassolutions.es/public_html/bodegalopez
+rm -rf ~/domains/bodegalopez.larassolutions.es/public_html
+ln -s ~/domains/bodegalopez.larassolutions.es/proximus/public ~/domains/bodegalopez.larassolutions.es/public_html
 
 php artisan config:cache && php artisan route:cache && php artisan view:cache
 ```
 
-**Estilos y scripts**: el hosting compartido no tiene Node. Se compilan en la computadora (`npm run build`) y se sube la carpeta `public/build` a `~/domains/larassolutions.es/proximus/public/build`.
+**Estilos y scripts**: el hosting compartido no tiene Node. Se compilan en la computadora (`npm run build`) y se sube la carpeta `public/build` a `~/domains/bodegalopez.larassolutions.es/proximus/public/build`.
 
 ## 3. Cron (hPanel → Avanzado → Cron Jobs)
 
-Cada minuto:
+Cada minuto (el plan no trae el comando crontab, se agrega desde hPanel):
 
 ```
-cd /home/USUARIO/domains/larassolutions.es/proximus && php artisan schedule:run >> /dev/null 2>&1
+cd /home/u375934362/domains/bodegalopez.larassolutions.es/proximus && php artisan schedule:run >> /dev/null 2>&1
 ```
 
 ## 4. Plantilla del `.env` de producción
@@ -96,7 +98,7 @@ PROXIMUS_ORDER_PREFIX=PED
 ## 5. Actualizar después
 
 ```bash
-cd ~/domains/larassolutions.es/proximus
+cd ~/domains/bodegalopez.larassolutions.es/proximus
 php artisan down
 git pull
 composer install --no-dev --optimize-autoloader
