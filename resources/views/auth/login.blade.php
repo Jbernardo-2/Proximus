@@ -112,6 +112,9 @@
                     </svg>
                     Acceso exclusivo para personal autorizado
                 </div>
+                <p class="mt-3 text-center text-xs">
+                    <a href="{{ route('app-download') }}" class="font-semibold text-leaf-700 hover:underline">Descargar la app para Android</a>
+                </p>
             </div>
         </section>
 
