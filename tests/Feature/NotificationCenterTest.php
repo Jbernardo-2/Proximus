@@ -13,7 +13,7 @@ class NotificationCenterTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
-    public function test_order_confirmation_notifies_active_operational_roles(): void
+    public function test_order_confirmation_notifies_only_the_active_warehouse(): void
     {
         $administrator = User::factory()->admin()->create();
         $supervisor = User::factory()->supervisor()->create();
@@ -24,8 +24,9 @@ class NotificationCenterTest extends TestCase
 
         app(OperationalNotificationService::class)->orderConfirmed($order);
 
-        $this->assertSame(1, $administrator->unreadNotifications()->count());
-        $this->assertSame(1, $supervisor->unreadNotifications()->count());
+        // Dozens a day would bury what management must see.
+        $this->assertSame(0, $administrator->unreadNotifications()->count());
+        $this->assertSame(0, $supervisor->unreadNotifications()->count());
         $this->assertSame(1, $warehouseUser->unreadNotifications()->count());
         $this->assertSame(0, $salesperson->unreadNotifications()->count());
         $this->assertSame(0, $inactiveWarehouseUser->unreadNotifications()->count());

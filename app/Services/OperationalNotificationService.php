@@ -17,8 +17,9 @@ class OperationalNotificationService
 {
     public function orderConfirmed(Order $order): void
     {
+        // Only the warehouse: on a normal day there are dozens, and they would bury what the supervisor must see.
         $this->notifyRoles(
-            [UserRole::Admin, UserRole::Supervisor, UserRole::Bodeguero],
+            [UserRole::Bodeguero],
             new OperationalNotification([
                 'type' => 'order_confirmed',
                 'title' => 'Nuevo pedido para bodega',
@@ -39,6 +40,7 @@ class OperationalNotificationService
             'message' => "La jornada {$deliveryRun->run_number} está lista para iniciar ruta.",
             'severity' => 'important',
             'url' => route('delivery-runs.show', $deliveryRun, false),
+            'delivery_run_id' => $deliveryRun->id,
         ]));
     }
 
@@ -57,6 +59,8 @@ class OperationalNotificationService
             'message' => "{$runOrder->order->order_number} · {$outcome->label()} en {$runOrder->deliveryRun->run_number}.",
             'severity' => $outcome === DeliveryOrderStatus::Delivered ? 'success' : 'warning',
             'url' => route('orders.show', $runOrder->order, false),
+            // The phone opens the run's stops to review it.
+            'delivery_run_id' => $runOrder->delivery_run_id,
         ]);
         $salesperson = $runOrder->order->salesperson;
 
@@ -83,6 +87,7 @@ class OperationalNotificationService
                 'message' => "{$deliveryRun->run_number} terminó sus paradas y requiere liquidación.",
                 'severity' => 'important',
                 'url' => route('delivery-runs.show', $deliveryRun, false),
+                'delivery_run_id' => $deliveryRun->id,
             ]),
         );
     }

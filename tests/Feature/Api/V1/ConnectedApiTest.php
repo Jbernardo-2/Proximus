@@ -54,11 +54,12 @@ class ConnectedApiTest extends TestCase
     {
         $user = User::factory()->supervisor()->create();
         foreach (['Jornada lista', 'Faltante'] as $title) {
-            $user->notify(new OperationalNotification(['type' => 'test', 'title' => $title, 'message' => '…', 'severity' => 'info', 'url' => '/dashboard']));
+            $user->notify(new OperationalNotification(['type' => 'test', 'title' => $title, 'message' => '…', 'severity' => 'info', 'url' => '/dashboard', 'delivery_run_id' => 'run-1']));
         }
         Sanctum::actingAs($user, $user->apiAbilities());
 
-        $list = $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('unread_count', 2)->assertJsonCount(2, 'data');
+        // The run lets the phone open the right screen when the notice is tapped.
+        $list = $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('unread_count', 2)->assertJsonCount(2, 'data')->assertJsonPath('data.0.delivery_run_id', 'run-1');
         $this->postJson('/api/v1/notifications/'.$list->json('data.0.id').'/read')->assertJsonPath('unread_count', 1);
         $this->postJson('/api/v1/notifications/read-all')->assertJsonPath('unread_count', 0);
     }

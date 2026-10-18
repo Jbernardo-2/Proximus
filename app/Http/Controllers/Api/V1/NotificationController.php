@@ -58,6 +58,7 @@ class NotificationController extends Controller
             'message' => (string) ($notification->data['message'] ?? ''),
             'severity' => (string) ($notification->data['severity'] ?? 'info'),
             'web_url' => isset($notification->data['url']) ? url((string) $notification->data['url']) : null,
+            'delivery_run_id' => $notification->data['delivery_run_id'] ?? null,
             'read' => $notification->read_at !== null,
             'created_at' => $notification->created_at?->toIso8601String(),
         ];
