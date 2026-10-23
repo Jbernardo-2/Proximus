@@ -65,6 +65,18 @@ class GeneralCatalogSeeder extends Seeder
         'Canada Dry', 'Big Cola', 'Kerns', 'Del Valle', 'Tampico', 'Jumex', 'Fristy', 'Zuko', 'Tang',
         'Kool-Aid', 'Gatorade', 'Powerade', 'Electrolit', 'Red Bull', 'Monster', 'Aguazul', 'Dasani',
         'Aquafina',
+        'Xedex', 'Ariel', 'Fab', 'Tide', 'Persil', 'Ultraklin', 'Swift', 'Más Color', 'Rendidor', 'Ace',
+        'Rinso', 'Downy', 'Suavitel', 'Axion', 'Limpiox', 'Salvo', 'Dawn', 'Clorox', 'Magia Blanca',
+        'Fabuloso', 'Lysol', 'Pine-Sol', 'Mistolin', 'Sapolio', 'Mr. Músculo', 'Glade', 'Air Wick', 'Raid',
+        'Baygon', 'Scotch-Brite', 'Vileda',
+        'Scott', 'Familia', 'Kleenex', 'Rosal', 'Nevax', 'Great Value', 'Essential Everyday', 'Ahorro Max',
+        'Diamond', 'Reynolds', 'Ziploc',
+        'Colgate', 'Oral-B', 'Listerine', 'Sensodyne', 'Crest', 'Palmolive', 'Protex', 'Dove', 'Lux',
+        'Nivea', 'Rexona', 'Axe', 'Speed Stick', 'Gillette', 'Pantene', 'Head & Shoulders', 'Sedal',
+        'Savilé', 'Herbal Essences', "Johnson's", 'Kotex', 'Always', 'Stayfree', 'Tena',
+        'Huggies', 'Pampers', 'Babysec', 'Gerber', 'Enfamil', 'Similac',
+        'Pedigree', 'Dog Chow', 'Cat Chow', 'Whiskas', 'Purina', 'Ganador', 'Ringo', 'Alpo', 'Friskies',
+        'Duracell', 'Energizer', 'Eveready', 'Bic',
     ];
 
     public function run(): void
